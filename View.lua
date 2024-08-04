@@ -276,14 +276,9 @@ function View:drawScreen()
     else
         local adjustedHeight = SCREENHEIGHT - Model.statusBarHeight
 
-        if not next(Model.dirtyLines) then
-            for y = 1, adjustedHeight do
-                self:drawLine(y)
-            end
-        else
-            for lineNumber in pairs(Model.dirtyLines) do
-                self:drawLine(lineNumber)
-            end
+
+        for lineNumber in pairs(Model.dirtyLines) do
+            self:drawLine(lineNumber)
         end
 
         Model:clearDirtyLines()
@@ -427,5 +422,4 @@ function View:getAvailableWidth()
     local lineNumberWidth = self:getLineNumberWidth()
     return SCREENWIDTH - lineNumberWidth - 1
 end
-term.scroll()
 return View

@@ -203,14 +203,9 @@ function Avim:updateScroll()
             self.horizontalScrollOffset = math.max(0, self.cursorX - visibleWidth)
         end
     end
-
-    -- Mark all visible lines as dirty if the scroll offset changes
     if self.scrollOffset ~= oldScrollOffset or self.horizontalScrollOffset ~= oldHorizontalScrollOffset then
         local view = getView()
-        for i = 1, adjustedHeight do
-            self:markDirty(self.scrollOffset + i)
-        end
-        view:drawScreen()  -- Ensure the screen is fully redrawn
+        view:refreshScreen()
         return true -- Indicate that the scroll offset was updated
     end
 
