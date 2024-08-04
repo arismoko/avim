@@ -173,6 +173,7 @@ function View:createWindow(x, y, width, height, backgroundColor, textColor)
         
     function window:close()
         local view = View:getInstance()
+        term.clear()
         view.activeWindow = nil
         view:refreshScreen()
     end
