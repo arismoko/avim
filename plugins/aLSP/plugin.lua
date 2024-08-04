@@ -35,8 +35,7 @@ local function init(components)
             local errorMessage = "Error: Failed to format buffer. " .. (formattedBuffer or "Unknown error")
             print(errorMessage)
             -- Adjust the popup to handle longer messages
-            viewInstance:showPopup(errorMessage)
-            viewInstance:refreshScreen()
+            viewInstance:showPopup("Error!")
         end
     end
 
