@@ -200,16 +200,17 @@ function Avim:updateScroll()
 
         -- Scroll right if the cursor is past the visible area
         elseif self.cursorX > self.horizontalScrollOffset + visibleWidth then
-            self.horizontalScrollOffset = math.min(self.cursorX - visibleWidth, #cursorLine - visibleWidth)
+            self.horizontalScrollOffset = self.cursorX - visibleWidth
         end
+
+        -- Ensure the horizontal scroll offset does not exceed the line length
+        self.horizontalScrollOffset = math.min(self.horizontalScrollOffset, math.max(0, #cursorLine - visibleWidth))
     end
 
     -- Mark all visible lines as dirty if the scroll offset changes
     if self.scrollOffset ~= oldScrollOffset or self.horizontalScrollOffset ~= oldHorizontalScrollOffset then
         local view = getView()
-        for i = 1, adjustedHeight do
-            self:markDirty(self.scrollOffset + i)
-        end
+        self:markAllVisibleLinesDirty(adjustedHeight)
         view:drawScreen()  -- Ensure the screen is fully redrawn
         return true -- Indicate that the scroll offset was updated
     end
