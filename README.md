@@ -1,7 +1,7 @@
 # AVIM: A Neovim-like Editor Inside ComputerCraft/CC:Tweaked
 
 **AVIM** is a custom text editor built inside the [ComputerCraft/CC:Tweaked](https://tweaked.cc/) mod for Minecraft. It emulates the functionality and feel of Neovim, offering features like keybindings, visual mode, command execution, and plugin support, all within the limited environment of ComputerCraft.
-
+![AVIM Screenshot](https://github.com/arismoko/avim/blob/main/example_image.png "AVIM in action")
 ## Features
 
 - **Modal Editing**: Just like Vim, AVIM operates in different modes (`Normal`, `Visual`, `Insert`, `Command`).
