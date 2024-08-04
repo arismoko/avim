@@ -441,21 +441,15 @@ function View:showAutocompleteWindow(suggestions)
     Model.suggestions = suggestions
     Model.autocompleteWindow:show()
 
-    -- Mark the current line as dirty to ensure it is redrawn
-    Model:markDirty(Model.cursorY)
-    self:drawLine(Model.cursorY - Model.scrollOffset)
-
+    View:refreshScreen()
     return Model.autocompleteWindow
 end
 function View:refreshScreen()
     -- Mark all lines as dirty except the status bar
-    local totalLines = #Model.buffer
     local adjustedHeight = SCREENHEIGHT - Model.statusBarHeight
-    
     for i = 1, adjustedHeight do
         Model:markDirty(i)
     end
-
     View:drawScreen()
     term.setCursorBlink(true)
 end

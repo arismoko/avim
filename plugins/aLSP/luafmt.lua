@@ -296,6 +296,7 @@ function LuaFmt:groupTokens(tokens)
     local stack = {}
 
     for _, token in ipairs(tokens) do
+        print("Grouping token:", token.text, token.tag)  -- Debugging output
         assert(token.text)
         token.headText = token.text
         token.tailText = token.text
@@ -328,6 +329,8 @@ function LuaFmt:groupTokens(tokens)
         error("Unclosed contexts in stack at the end of grouping")
     end
 
+    -- Debugging output to inspect the final context
+    print("Final context structure:", context.tag, #context.children)
     return context
 end
 
