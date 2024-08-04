@@ -2,8 +2,11 @@ local function init(components)
     local Avim = components.Avim
     local KeyHandler = components.KeyHandler
 
-    -- Load luafmt
-    local luafmt = require("plugins.aLSP.luafmt")
+    -- Load LuaFmt class
+    local LuaFmt = require("plugins.aLSP.luafmt")
+
+    -- Instantiate LuaFmt with a column limit of 80
+    local luaFmtInstance = LuaFmt:new(80)
 
     local function formatBuffer()
         local model = Avim:getInstance()
@@ -12,8 +15,8 @@ local function init(components)
         -- Convert the buffer into a single Lua script string
         local luaCode = table.concat(buffer, "\n")
 
-        -- Format the Lua code using luafmt
-        local formattedLua = luafmt(luaCode, 80) -- 80 is the column limit
+        -- Format the Lua code using luaFmtInstance
+        local formattedLua = luaFmtInstance:formatLuaCode(luaCode)
 
         if formattedLua then
             -- Replace the current buffer with the formatted Lua code
