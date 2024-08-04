@@ -241,50 +241,52 @@ function View:closeAllWindows()
 end
 
 function View:showPopup(message)
-    local function validateScreenWidth()
-        if type(SCREENWIDTH) ~= "number" then
-            error("SCREENWIDTH must be a number")
+    -- Ensure SCREENWIDTH is a valid number
+    if type(SCREENWIDTH) ~= "number" then
+        error("SCREENWIDTH must be a number")
+    end
+
+    -- Define padding and maximum width for the popup
+    local padding = 2
+    local maxPopupWidth = SCREENWIDTH - 4
+
+    -- Word wrap the message based on maxPopupWidth
+    local lines = {}
+    local currentLine = ""
+    for word in message:gmatch("%S+") do
+        if #currentLine + #word + 1 > maxPopupWidth then
+            table.insert(lines, currentLine)
+            currentLine = word
+        else
+            currentLine = currentLine == "" and word or currentLine .. " " .. word
         end
     end
-
-    local function splitMessageIntoLines(msg, maxLineLength)
-        local lines = {}
-        for i = 1, #msg, maxLineLength do
-            table.insert(lines, msg:sub(i, i + maxLineLength - 1))
-        end
-        return lines
+    if currentLine ~= "" then
+        table.insert(lines, currentLine)
     end
 
-    local function calculatePopupDimensions(lines)
-        local popupWidth = math.min(25, SCREENWIDTH - 4)
-        local popupHeight = math.min(#lines + 2, SCREENHEIGHT - 4)
-        local popupX = math.floor((SCREENWIDTH - popupWidth) / 2)
-        local popupY = math.floor((SCREENHEIGHT - popupHeight) / 2)
-        return popupWidth, popupHeight, popupX, popupY
-    end
+    -- Determine popup dimensions
+    local popupWidth = math.min(maxPopupWidth, #lines[1] + padding * 2)
+    local popupHeight = #lines + 2
+    local popupX = math.floor((SCREENWIDTH - popupWidth) / 2)
+    local popupY = math.floor((SCREENHEIGHT - popupHeight) / 2)
 
-    local function drawPopupWindow(window, lines, width)
-        window:clear()
-        window:writeline(string.rep("-", width - 2))
-        for _, line in ipairs(lines) do
-            window:writeline("| " .. line .. string.rep(" ", width - #line - 3) .. "|")
-        end
-        window:writeline(string.rep("-", width - 2))
-    end
-
-    validateScreenWidth()
-
-    local maxLineLength = math.min(25, SCREENWIDTH)
-    local lines = splitMessageIntoLines(message, maxLineLength)
-
-    local popupWidth, popupHeight, popupX, popupY = calculatePopupDimensions(lines)
+    -- Create and display the popup window
     local window = self:createWindow(popupX, popupY, popupWidth, popupHeight, colors.lightGray, colors.black)
+    window:clear()
+    window:writeline(string.rep("-", popupWidth))
 
-    drawPopupWindow(window, lines, popupWidth)
+    for _, line in ipairs(lines) do
+        local paddingSpaces = math.floor((popupWidth - #line) / 2)
+        window:writeline("|" .. string.rep(" ", paddingSpaces) .. line .. string.rep(" ", popupWidth - #line - paddingSpaces - 2) .. "|")
+    end
+
+    window:writeline(string.rep("-", popupWidth))
 
     os.pullEvent("key")
     window:close()
 end
+
 
 
 function View:drawScreen()
