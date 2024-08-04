@@ -400,6 +400,7 @@ function LuaFmt:renderGroup(tree, column, indent, buffer)
 end
 
 function LuaFmt:renderCode(tree, column, indent, buffer)
+	print("tree.children: ", tree.children)
     for i, child in ipairs(tree.children) do
 		print("Child: ", child.tag)
         local space = self:determineSpace(tree, i, indent)
