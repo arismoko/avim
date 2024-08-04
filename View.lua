@@ -173,16 +173,8 @@ function View:createWindow(x, y, width, height, backgroundColor, textColor)
         
     function window:close()
         local view = View:getInstance()
-        local model = Model:getInstance()
-        
-        -- Mark lines the window was covering as dirty
-        for i = self.y, self.y + self.height - 1 do
-            local lineIndex = model.scrollOffset + i
-            model:markDirty(lineIndex)
-        end
-
         view.activeWindow = nil
-        view:drawScreen()
+        view:refreshScreen()
     end
 
     function window:writeText(x, y, text)
@@ -245,7 +237,7 @@ function View:closeAllWindows()
     end
     self.windows = {}
     self.activeWindow = nil
-    self:drawScreen()
+    self:refreshScreen()
 end
 
 function View:showPopup(message)
@@ -427,16 +419,7 @@ function View:refreshScreen()
         Model:markDirty(i)
     end
 
-    -- Redraw only the main text area of the screen
-    if self.activeWindow then
-        self.activeWindow:show()
-    else
-        for lineNumber in pairs(Model.dirtyLines) do
-            self:drawLine(lineNumber)
-        end
-    end
-
-    Model:clearDirtyLines()
+    View:drawScreen()
     term.setCursorBlink(true)
 end
 

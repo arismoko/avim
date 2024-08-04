@@ -127,7 +127,7 @@ function Avim:endVisualMode()
     
     -- Redraw the screen to remove highlights
     local view = getView()
-    view:drawScreen()
+    view:refreshScreen()
 end
 
 -- Loading and saving files
