@@ -303,6 +303,7 @@ function LuaFmt:groupTokens(tokens)
         token.tailTag = token.tag
         token.headTag = token.tag
         assert(token.headText)
+        
         if OPENS[token.tag] then
             print("Opening context for:", token.tag)
             table.insert(stack, context)
@@ -335,6 +336,7 @@ function LuaFmt:groupTokens(tokens)
     print("Final context structure:", context.tag, #context.children)
     return context
 end
+
 
 
 function LuaFmt:matchRule(rule, a, b)
