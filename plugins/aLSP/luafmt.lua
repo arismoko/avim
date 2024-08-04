@@ -339,6 +339,10 @@ function LuaFmt:groupTokens(tokens)
             table.insert(context.children, newContext)
             context = newContext
         elseif CLOSES[token.tag] then
+            if context.tag ~= CLOSES[token.tag] then
+                print("Mismatched close token:", token.text, "Expected context:", context.tag)
+                print("Stack:", stack)
+            end
             assert(context.tag == CLOSES[token.tag])
             table.insert(context.children, token)
             context.tailTag = context.children[#context.children].tailTag
@@ -352,9 +356,14 @@ function LuaFmt:groupTokens(tokens)
         end
     end
 
+    if #stack > 0 then
+        print("Unclosed contexts in stack:", stack)
+    end
+
     assert(#stack == 0)
     return context
 end
+
 
 function LuaFmt:matchLeft(m, t)
     assert(type(m) == "string")
