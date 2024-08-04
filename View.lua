@@ -250,11 +250,14 @@ function View:showPopup(message)
     local padding = 2
     local maxPopupWidth = SCREENWIDTH - 4
 
-    -- Word wrap the message based on maxPopupWidth
+    -- Adjust maxPopupWidth to account for padding in the display
+    local effectiveMaxWidth = maxPopupWidth - padding * 2
+
+    -- Word wrap the message based on effectiveMaxWidth
     local lines = {}
     local currentLine = ""
     for word in message:gmatch("%S+") do
-        if #currentLine + #word + 1 > maxPopupWidth then
+        if #currentLine + #word + 1 > effectiveMaxWidth then
             table.insert(lines, currentLine)
             currentLine = word
         else
