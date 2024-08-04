@@ -43,7 +43,57 @@ function KeyHandler:getInstance()
     return instance
 end
 
--- Parse key combination string into modifiers and main key sequence
+-- Special character mappings
+local specialCharacterMap = {
+    ["!"] = "shift + one",
+    ["@"] = "shift + two",
+    ["#"] = "shift + three",
+    ["$"] = "shift + four",
+    ["%"] = "shift + five",
+    ["^"] = "shift + six",
+    ["&"] = "shift + seven",
+    ["*"] = "shift + eight",
+    ["("] = "shift + nine",
+    [")"] = "shift + zero",
+    ["_"] = "shift + minus",
+    ["+"] = "shift + equals",
+    ["Q"] = "shift + q",
+    ["W"] = "shift + w",
+    ["E"] = "shift + e",
+    ["R"] = "shift + r",
+    ["T"] = "shift + t",
+    ["Y"] = "shift + y",
+    ["U"] = "shift + u",
+    ["I"] = "shift + i",
+    ["O"] = "shift + o",
+    ["P"] = "shift + p",
+    ["{"] = "shift + leftBracket",
+    ["}"] = "shift + rightBracket",
+    ["|"] = "shift + backslash",
+    ["A"] = "shift + a",
+    ["S"] = "shift + s",
+    ["D"] = "shift + d",
+    ["F"] = "shift + f",
+    ["G"] = "shift + g",
+    ["H"] = "shift + h",
+    ["J"] = "shift + j",
+    ["K"] = "shift + k",
+    ["L"] = "shift + l",
+    [":"] = "shift + semicolon",
+    ['"'] = "shift + apostrophe",
+    ["Z"] = "shift + z",
+    ["X"] = "shift + x",
+    ["C"] = "shift + c",
+    ["V"] = "shift + v",
+    ["B"] = "shift + b",
+    ["N"] = "shift + n",
+    ["M"] = "shift + m",
+    ["<"] = "shift + comma",
+    [">"] = "shift + period",
+    ["?"] = "shift + slash"
+}
+
+-- Modify the parseKeyCombo function
 function KeyHandler:parseKeyCombo(combo)
     local modifiers = {}
     local keys = {}
@@ -60,12 +110,26 @@ function KeyHandler:parseKeyCombo(combo)
             table.insert(keys, part:sub(1, -2)) -- Remove the "^"
             keyUpEvent = true
         else
-            table.insert(keys, part)
+            -- Check if the part is in the specialCharacterMap
+            local mappedPart = specialCharacterMap[part]
+            if mappedPart then
+                -- Split the mappedPart into modifiers and keys
+                for mod in mappedPart:gmatch("[^%s+]+") do
+                    if mod == "shift" or mod == "ctrl" or mod == "alt" then
+                        table.insert(modifiers, mod)
+                    else
+                        table.insert(keys, mod)
+                    end
+                end
+            else
+                table.insert(keys, part)
+            end
         end
     end
 
     return modifiers, keys, isLeaderKey, keyUpEvent
 end
+
 function table.contains(tbl, element)
     for _, value in pairs(tbl) do
         if value == element then
@@ -312,8 +376,7 @@ function KeyHandler:handleCharEvent(model, view)
 
         if event == "char" then
             self:handleCharInput(key, model, view)
-            view:drawLine(model.cursorY - model.scrollOffset)
-            view:drawScreen()
+            view:refreshScreen()
         elseif event == "key" then
             -- Refactor to check keyMap in "insert" mode
             local action = self.keyMap[model.mode][keys.getName(key)]

@@ -3,7 +3,7 @@ SCREENWIDTH, SCREENHEIGHT = term.getSize()
 
 -- Load core components
 local View = require("View"):getInstance()
-local Model = require("Model"):getInstance()
+local Model = require("Avim"):getInstance()
 local KeyHandler = require("KeyHandler"):getInstance()
 local CommandHandler = require("CommandHandler"):getInstance()
 

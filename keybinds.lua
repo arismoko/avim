@@ -1,6 +1,6 @@
 local KeyHandler = require("KeyHandler"):getInstance()
 local CommandHandler = require("CommandHandler"):getInstance()
-local Model = require("Model"):getInstance()
+local avim = require("Avim"):getInstance()
 
 -- === Normal and Visual Mode Keybindings ===
 
@@ -22,15 +22,15 @@ KeyHandler:map({"n", "v"}, "l", function()
 end, "Move Right")
 
 -- Cursor movement within the line
-KeyHandler:map({"n", "v"}, {"zero", "0"}, function()
+KeyHandler:map({"n", "v"}, "0", function()
     CommandHandler:execute("move_to_line_start")
 end, "Move to Start of Line")
 
-KeyHandler:map({"n", "v"}, {"shift + six", "shift + ^"}, function()
+KeyHandler:map({"n", "v"}, "^", function()
     CommandHandler:execute("move_to_first_non_blank")
 end, "Move to First Non-Blank Character")
 
-KeyHandler:map({"n", "v"}, {"shift + four", "shift + $"}, function()
+KeyHandler:map({"n", "v"}, "$", function()
     CommandHandler:execute("move_to_line_end")
 end, "Move to End of Line")
 
@@ -48,11 +48,11 @@ KeyHandler:map({"n", "v"}, "e", function()
 end, "Move to End of Word")
 
 -- Paragraph motions
-KeyHandler:map({"n", "v"},"shift + leftBracket", function()
+KeyHandler:map({"n", "v"}, "{", function()
     CommandHandler:execute("move_paragraph_back")
 end, "Move to Previous Paragraph")
 
-KeyHandler:map({"n", "v"},"shift + rightBracket", function()
+KeyHandler:map({"n", "v"}, "}", function()
     CommandHandler:execute("move_paragraph_forward")
 end, "Move to Next Paragraph")
 
@@ -66,11 +66,11 @@ KeyHandler:map({"n", "v"}, "t", function()
 end, "Find Before Character in Line")
 
 -- Repeating last character search
-KeyHandler:map({"n", "v"}, {"shift + semicolon", "shift + ;"}, function()
+KeyHandler:map({"n", "v"}, "n", function()
     CommandHandler:execute("repeat_last_find")
 end, "Repeat Last Find")
 
-KeyHandler:map({"n", "v"}, "comma", function()
+KeyHandler:map({"n", "v"}, ",", function()
     CommandHandler:execute("repeat_last_find_reverse")
 end, "Repeat Last Find in Reverse")
 
@@ -79,19 +79,19 @@ KeyHandler:map({"n", "v"}, "g + g", function()
     CommandHandler:execute("move_to_top")
 end, "Move to Top")
 
-KeyHandler:map({"n", "v"}, {"shift + g", "shift + G"}, function()
+KeyHandler:map({"n", "v"}, "G", function()
     CommandHandler:execute("move_to_bottom")
 end, "Move to Bottom")
 
-KeyHandler:map({"n", "v"}, {"shift + h", "shift + H"}, function()
+KeyHandler:map({"n", "v"}, "H", function()
     CommandHandler:execute("move_to_top_of_screen")
 end, "Move to Top of Screen")
 
-KeyHandler:map({"n", "v"}, {"shift + m", "shift + M"}, function()
+KeyHandler:map({"n", "v"}, "M", function()
     CommandHandler:execute("move_to_middle_of_screen")
 end, "Move to Middle of Screen")
 
-KeyHandler:map({"n", "v"}, {"shift + l", "shift + L"}, function()
+KeyHandler:map({"n", "v"}, "L", function()
     CommandHandler:execute("move_to_bottom_of_screen")
 end, "Move to Bottom of Screen")
 
@@ -112,7 +112,7 @@ KeyHandler:map("n", "c + w", function()
     CommandHandler:execute("change_word")
 end, "Change Word")
 
-KeyHandler:map("n", "shift + y", function()
+KeyHandler:map("n", "Y", function()
     CommandHandler:execute("yank_line")
 end, "Yank Line")
 
@@ -120,7 +120,7 @@ KeyHandler:map({"n", "v"}, "x", function()
     CommandHandler:execute("delete_char")
 end, "Delete Char")
 
-KeyHandler:map({"n", "v"}, {"shift + x", "shift + X"}, function()
+KeyHandler:map({"n", "v"}, "X", function()
     CommandHandler:execute("delete_char_before")
 end, "Delete Char Before")
 
@@ -132,40 +132,36 @@ KeyHandler:map("n", "u", function()
     CommandHandler:execute("undo")
 end, "Undo")
 
-KeyHandler:map("n", {"ctrl + u"}, function()
+KeyHandler:map("n", "ctrl + r", function()
     CommandHandler:execute("redo")
 end, "Redo")
 
-KeyHandler:map("n", {"ctrl + v"}, function()
+KeyHandler:map("n", "ctrl + v", function()
     CommandHandler:execute("paste_clipboard")
 end, "Paste Clipboard")
 
 -- Mode Switching (Normal Mode Only)
-KeyHandler:map("n", {"i^"}, function()
+KeyHandler:map("n", "i^", function()
     CommandHandler:execute("enter_insert_mode")
 end, "Enter Insert Mode on Key Release")
 
-KeyHandler:map("n", {"a^"}, function()
+KeyHandler:map("n", "a^", function()
     CommandHandler:execute("append_to_line")
 end, "Append to Line on Key Release")
 
-KeyHandler:map("n", {"shift + i^", "shift + I^"}, function()
+KeyHandler:map("n", "I^", function()
     CommandHandler:execute("insert_at_line_start")
 end, "Insert at Line Start on Key Release")
 
-KeyHandler:map("n", {"o^"}, function()
+KeyHandler:map("n", "o^", function()
     CommandHandler:execute("open_line_below")
 end, "Open Line Below on Key Release")
 
-KeyHandler:map("n", {"shift + o^", "shift + O^"}, function()
+KeyHandler:map("n", "O^", function()
     CommandHandler:execute("open_line_above")
 end, "Open Line Above on Key Release")
 
-KeyHandler:map("n", {"shift + semiColon", "shift + ;"}, function()
-    CommandHandler:execute("enter_command_mode")
-end, "Enter Command Mode")
-
-KeyHandler:map("n", "q", function()
+KeyHandler:map("n", {":","shift+semiColon"}, function()
     CommandHandler:execute("enter_command_mode")
 end, "Enter Command Mode")
 
@@ -173,26 +169,26 @@ KeyHandler:map("n", "v", function()
     CommandHandler:execute("enter_visual_mode")
 end, "Enter Visual Mode")
 
-KeyHandler:map("n", {"f9"}, function()
+KeyHandler:map("n", "f9", function()
     CommandHandler:execute("exit_editor")
 end, "Exit Editor")
 
 -- Search and Replace
-KeyHandler:map("n", "slash", function()
-    Model:switchMode("command", "search ")   
+KeyHandler:map("n", "/", function()
+    avim:switchMode("command", "search ")   
 end, "Search")
 
-KeyHandler:map("n", {"shift + slash", "shift + /"}, function()
-    Model:switchMode("command", "replace ")   
+KeyHandler:map("n", "?", function()
+    avim:switchMode("command", "replace ")   
 end, "Replace")
 
-KeyHandler:map("n", {"ctrl + slash"}, function()
-    Model:switchMode("command", "replace_all ")
+KeyHandler:map("n", "ctrl + /", function()
+    avim:switchMode("command", "replace_all ")
 end, "Replace All")
 
-KeyHandler:map("n", "n", function()
-    Model:switchMode("command", nil, true)
-end, "Search Next")
+KeyHandler:map("n", "ctrl + n", function()
+    avim:switchMode("command", nil, true)
+end, "Execute previous command")
 
 -- === Visual Mode Specific Keybindings ===
 
@@ -217,15 +213,15 @@ KeyHandler:map("v", "x", function()
     CommandHandler:execute("end_visual_mode")
 end, "Cut Visual Selection and End Visual Mode")
 
-KeyHandler:map("v", {"shift + comma", "shift + ,"}, function()
+KeyHandler:map("v", "<", function()
     CommandHandler:execute("unindent_visual_selection")
 end, "Unindent Visual Selection")
 
-KeyHandler:map("v", {"shift + period", "shift + ."}, function()
+KeyHandler:map("v", ">", function()
     CommandHandler:execute("indent_visual_selection")
 end, "Indent Visual Selection")
 
-KeyHandler:map("v", {"shift + u", "shift + U"}, function()
+KeyHandler:map("v", "U", function()
     CommandHandler:execute("uppercase_visual_selection")
 end, "Uppercase Visual Selection")
 
@@ -233,16 +229,16 @@ KeyHandler:map("v", "u", function()
     CommandHandler:execute("lowercase_visual_selection")
 end, "Lowercase Visual Selection")
 
-KeyHandler:map("v", {"shift + j", "shift + J"}, function()
+KeyHandler:map("v", "J", function()
     CommandHandler:execute("join_visual_selection")
 end, "Join Visual Selection")
 
-KeyHandler:map("v", {"shift + tilde", "shift + ~"}, function()
+KeyHandler:map("v", "~", function()
     CommandHandler:execute("swap_case_visual_selection")
 end, "Swap Case of Visual Selection")
 
 -- Mode Switching
-KeyHandler:map("v", {"f1"}, function()
+KeyHandler:map("v", "f1", function()
     CommandHandler:execute("end_visual_mode")
 end, "End Visual Mode")
 
@@ -250,10 +246,9 @@ KeyHandler:map("v", "v", function()
     CommandHandler:execute("end_visual_mode")
 end, "End Visual Mode")
 
-
 -- === Insert Mode Keybindings ===
 
-KeyHandler:map("i", {"f1"}, function()
+KeyHandler:map("i", "f1", function()
     CommandHandler:execute("insert_exit_to_normal")
 end, "Exit to Normal Mode")
 

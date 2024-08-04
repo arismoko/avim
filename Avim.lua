@@ -1,13 +1,13 @@
 -- Model.lua
 
-Model = {}
-Model.__index = Model
+Avim = {}
+Avim.__index = Avim
 
 local instance
 local cachedView -- This will hold the cached View instance
 
 -- Singleton pattern for Model
-function Model:new()
+function Avim:new()
     if not instance then
         instance = {
             buffer = {},
@@ -29,13 +29,13 @@ function Model:new()
             statusBarHeight = 2, -- Height of the status bar (dynamically tracked)
             dirtyLines = {} -- Added initialization for dirtyLines
         }
-        setmetatable(instance, Model)
+        setmetatable(instance, Avim)
     end
     return instance
 end
-function Model:getInstance()
+function Avim:getInstance()
     if not instance then
-        instance = Model:new()
+        instance = Avim:new()
     end
     return instance
 end
@@ -48,21 +48,21 @@ local function getView()
     return cachedView
 end
 
-function Model:updateStatusBar(message)
+function Avim:updateStatusBar(message)
     local view = getView()
     self.statusMessage = message
     self.statusColor = colors.green -- Reset to default color
     view:drawStatusBar(SCREENWIDTH, SCREENHEIGHT)
 end
 
-function Model:updateStatusError(message)
+function Avim:updateStatusError(message)
     local view = getView()
     self.statusMessage = message
     self.statusColor = colors.red -- Set color to red for errors
     view:drawStatusBar(SCREENWIDTH, SCREENHEIGHT)
 end
 
-function Model:clearStatusBar()
+function Avim:clearStatusBar()
     local view = getView()
     self.statusMessage = ""
     self.statusColor = colors.green -- Reset to default color
@@ -70,7 +70,7 @@ function Model:clearStatusBar()
 end
 
 -- Undo functionality with history and redo stack management
-function Model:undo()
+function Avim:undo()
     if #self.history > 0 then
         local lastState = table.remove(self.history)
         table.insert(self.redoStack, {
@@ -88,7 +88,7 @@ function Model:undo()
     end
 end
 
-function Model:redo()
+function Avim:redo()
     if #self.redoStack > 0 then
         local redoState = table.remove(self.redoStack)
         table.insert(self.history, {
@@ -107,7 +107,7 @@ function Model:redo()
 end
 
 -- Visual mode handling
-function Model:startVisualMode()
+function Avim:startVisualMode()
     self.visualStartX = self.cursorX
     self.visualStartY = self.cursorY
     self.isVisualMode = true
@@ -115,7 +115,7 @@ function Model:startVisualMode()
     self:switchMode("visual") -- Switch to visual mode
 end
 
-function Model:endVisualMode()
+function Avim:endVisualMode()
     self.visualStartX = nil
     self.visualStartY = nil
     self.isVisualMode = false
@@ -128,7 +128,7 @@ function Model:endVisualMode()
 end
 
 -- Loading and saving files
-function Model:loadFile(name)
+function Avim:loadFile(name)
     self.filename = name
     self.buffer = {}
     if fs.exists(self.filename) then
@@ -147,12 +147,12 @@ function Model:loadFile(name)
         self:markDirty(i)
     end
 end
-function Model:close()
+function Avim:close()
     self.shouldExit = true
     self:updateStatusBar("Closed editor")
 end
 
-function Model:yankLine()
+function Avim:yankLine()
     if #self.buffer == 0 then
         self:updateStatusError("Nothing to yank")
         return
@@ -164,7 +164,7 @@ end
 
 
 
-function Model:saveFile()
+function Avim:saveFile()
     local file = fs.open(self.filename, "w")
     for _, line in ipairs(self.buffer) do
         file.writeLine(line)
@@ -173,7 +173,7 @@ function Model:saveFile()
     self:updateStatusBar("File saved: " .. self.filename)
 end
 
-function Model:updateScroll()
+function Avim:updateScroll()
 
     local adjustedHeight = SCREENHEIGHT - self.statusBarHeight
 
@@ -202,7 +202,7 @@ end
 
 
 -- Function to mark all visible lines as dirty
-function Model:markAllVisibleLinesDirty(adjustedHeight)
+function Avim:markAllVisibleLinesDirty(adjustedHeight)
     for i = 1, adjustedHeight do
         self:markDirty(self.scrollOffset + i)
     end
@@ -210,24 +210,24 @@ end
 
 
 
-function Model:setStatusBarHeight(height)
+function Avim:setStatusBarHeight(height)
     self.statusBarHeight = height
 end
 
 -- Mark a line as dirty (needing to be redrawn)
-function Model:markDirty(lineNumber)
+function Avim:markDirty(lineNumber)
     if type(lineNumber) == "number" and lineNumber > 0 and lineNumber <= #self.buffer then
         self.dirtyLines[lineNumber] = true
     end
 end
 
 -- Clear all dirty lines after they've been redrawn
-function Model:clearDirtyLines()
+function Avim:clearDirtyLines()
     self.dirtyLines = {}
 end
 
 -- Editing operations
-function Model:insertChar(char)
+function Avim:insertChar(char)
     if #self.buffer == 0 then
         table.insert(self.buffer, "")
     end
@@ -239,7 +239,7 @@ function Model:insertChar(char)
     self:updateStatusBar("Inserted character")
 end
 
-function Model:backspace()
+function Avim:backspace()
     if self.cursorX > 1 then
         self:saveToHistory()
         local line = self.buffer[self.cursorY]
@@ -260,7 +260,7 @@ function Model:backspace()
     end
 end
 
-function Model:enter()
+function Avim:enter()
     if #self.buffer == 0 then
         table.insert(self.buffer, "")
     end
@@ -276,7 +276,7 @@ function Model:enter()
     self:updateStatusBar("Inserted new line")
 end
 
-function Model:paste()
+function Avim:paste()
     self:saveToHistory()
 
     local lines = {}
@@ -320,7 +320,7 @@ function Model:paste()
 end
 
 -- Visual mode operations (yank and cut)
-function Model:yankSelection()
+function Avim:yankSelection()
     if not self.visualStartX or not self.visualStartY then
         self:updateStatusError("No selection to yank")
         return
@@ -348,7 +348,7 @@ function Model:yankSelection()
     self:updateStatusBar("Yanked selection")
 end
 
-function Model:cutSelection()
+function Avim:cutSelection()
     if not self.visualStartX or not self.visualStartY then
         self:updateStatusError("No selection to cut")
         return
@@ -391,7 +391,7 @@ function Model:cutSelection()
     self:updateStatusBar("Cut selection")
 end
 
-function Model:cutLine()
+function Avim:cutLine()
     if #self.buffer == 0 then
         self:updateStatusError("Nothing to cut")
         return
@@ -409,7 +409,7 @@ function Model:cutLine()
 end
 
 -- Mode switching and history management
-function Model:switchMode(mode, initialCommand, autoExecute)
+function Avim:switchMode(mode, initialCommand, autoExecute)
     self:saveToHistory()
     self.mode = mode
 
@@ -444,7 +444,7 @@ function Model:switchMode(mode, initialCommand, autoExecute)
 end
 
 -- Save the current state to history
-function Model:saveToHistory()
+function Avim:saveToHistory()
     table.insert(self.history, {
         buffer = table.deepCopy(self.buffer),
         cursorX = self.cursorX,
@@ -470,7 +470,7 @@ function table.deepCopy(orig)
 end
 
 -- Word detection for autocomplete functionality
-function Model:getWordAtCursor()
+function Avim:getWordAtCursor()
     local line = self.buffer[self.cursorY] or ""
     local startPos = self.cursorX
 
@@ -502,7 +502,7 @@ local function getNestedValue(root, pathParts)
 end
 
 -- Function to get autocomplete suggestions
-function Model:getAutocompleteSuggestions(prefix)
+function Avim:getAutocompleteSuggestions(prefix)
     local suggestions = {}
 
     self:updateStatusBar("Suggestions for: " .. prefix)
@@ -551,7 +551,7 @@ function Model:getAutocompleteSuggestions(prefix)
     return suggestions
 end
 
-function Model:insertTextAtCursor(text)
+function Avim:insertTextAtCursor(text)
 
     local lines = {}
     for line in text:gmatch("([^\n]*)\n?") do
@@ -589,4 +589,4 @@ function Model:insertTextAtCursor(text)
     self:saveToHistory()
 end
 
-return Model
+return Avim

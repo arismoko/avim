@@ -1,4 +1,4 @@
-local Model = require("Model"):getInstance()
+local Model = require("Avim"):getInstance()
 
 View = {}
 View.__index = View
@@ -410,6 +410,16 @@ function View:showAutocompleteWindow(suggestions)
     self:drawLine(Model.cursorY - Model.scrollOffset)
 
     return Model.autocompleteWindow
+end
+function View:refreshScreen()
+    -- Mark all lines as dirty
+    local totalLines = #Model.buffer
+    for i = 1, totalLines do
+        Model:markDirty(i)
+    end
+
+    -- Redraw the entire screen
+    self:drawScreen()
 end
 
 function View:getAvailableWidth()
