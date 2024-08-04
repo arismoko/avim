@@ -1,25 +1,36 @@
 local function init(components)
     local Avim = components.Avim
     local KeyHandler = components.KeyHandler
-
-    -- Load LuaFmt class
-    local LuaFmt = require("plugins.aLSP.luafmt")
     local View = require("View")
 
-    -- Instantiate LuaFmt with a column limit of 80
-    local luaFmtInstance = LuaFmt:new(80)
+    -- Instantiate the view instance for displaying popups
     local viewInstance = View:getInstance()
 
     local function formatBuffer()
         local model = Avim:getInstance()
         local buffer = model.buffer
 
-        -- Format the Lua buffer using luaFmtInstance
-        local status, formattedBuffer = pcall(function()
-            return luaFmtInstance:formatBuffer(buffer)
+        -- Save the current buffer to a temporary file
+        local tempFile = "/tmp/temp_lua_buffer.lua"
+        local file = fs.open(tempFile, "w")
+        file.write(buffer)
+        file.close()
+
+        -- Construct the command to run the formatter
+        local formatterScript = "plugins/aLSP/luafmt.lua"
+        local command = "lua " .. formatterScript .. " --f " .. tempFile .. " 80"
+
+        -- Run the formatter script
+        local status, errorMessage = pcall(function()
+           shell.run(command) 
         end)
 
-        if status and formattedBuffer then
+        if status then
+            -- Read the formatted buffer back from the temporary file
+            local formattedFile = fs.open(tempFile, "r")
+            local formattedBuffer = formattedFile.readAll()
+            formattedFile.close()
+
             -- Replace the current buffer with the formatted Lua buffer
             model.buffer = formattedBuffer
 
@@ -31,12 +42,14 @@ local function init(components)
             -- Update the status bar to indicate success
             model:updateStatusBar("Buffer formatted successfully!")
         else
-            -- Capture the error message from pcall
-            local errorMessage = "Error: Failed to format buffer. " .. (formattedBuffer or "Unknown error")
+            -- Handle the error if the formatting fails
+            local errorMessage = "Error: Failed to format buffer. " .. (errorMessage or "Unknown error")
             print(errorMessage)
-            -- Adjust the popup to handle longer messages
             viewInstance:showPopup("Error!")
         end
+
+        -- Clean up the temporary file
+        fs.delete(tempFile)
     end
 
     -- Map the formatting function to a keybinding
