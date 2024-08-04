@@ -241,32 +241,36 @@ function View:closeAllWindows()
 end
 
 function View:showPopup(message)
-    -- Ensure SCREENWIDTH is a valid number
-    if type(SCREENWIDTH) ~= "number" then
-        error("SCREENWIDTH must be a number")
-    end
+    -- Get the dimensions of the screen
+    local screenWidth, screenHeight = term.getSize()
 
-    local lines = {}
-    for i = 1, #message, SCREENWIDTH do
-        table.insert(lines, message:sub(i, i + SCREENWIDTH - 1))
-    end
+    -- Create a full-screen window
+    local window = self:createWindow(1, 1, screenWidth, screenHeight, colors.lightGray, colors.black)
 
-    local popupWidth = SCREENWIDTH - 4
-    local popupHeight = math.min(#lines + 2, SCREENHEIGHT - 4)
-    local popupX = math.floor((SCREENWIDTH - popupWidth) / 2)
-    local popupY = math.floor((SCREENHEIGHT - popupHeight) / 2)
-
-    local window = self:createWindow(popupX, popupY, popupWidth, popupHeight, colors.lightGray, colors.black)
+    -- Clear the window and write the error message
     window:clear()
-    window:writeline(string.rep("-", popupWidth - 2))
-    for _, line in ipairs(lines) do
-        window:writeline("| " .. line .. string.rep(" ", popupWidth - #line - 3) .. "|")
-    end
-    window:writeline(string.rep("-", popupWidth - 2))
 
+    -- Split the message into lines that fit within the screen width
+    local lines = {}
+    for i = 1, #message, screenWidth do
+        table.insert(lines, message:sub(i, i + screenWidth - 1))
+    end
+
+    -- Write the message lines in the center of the screen
+    local startY = math.floor((screenHeight - #lines) / 2)
+    for i, line in ipairs(lines) do
+        local startX = math.floor((screenWidth - #line) / 2)
+        window:writeText(startX, startY + i, line)
+    end
+
+    -- Show the window
+    window:show()
+
+    -- Wait for a key event to close the window
     os.pullEvent("key")
     window:close()
 end
+
 
 
 function View:drawScreen()
