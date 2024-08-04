@@ -274,6 +274,19 @@ function View:showPopup(message)
         table.insert(lines, currentLine)
     end
 
+    -- Split any line over 40 characters into 4-character parts
+    local splitLines = {}
+    for _, line in ipairs(lines) do
+        if #line > 40 then
+            for i = 1, #line, 4 do
+                table.insert(splitLines, line:sub(i, i + 3))
+            end
+        else
+            table.insert(splitLines, line)
+        end
+    end
+    lines = splitLines
+
     -- Calculate the final width and height of the popup
     local popupWidth = 0
     for _, line in ipairs(lines) do
