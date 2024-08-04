@@ -4,9 +4,11 @@ local function init(components)
 
     -- Load LuaFmt class
     local LuaFmt = require("plugins.aLSP.luafmt")
+    local View = require("View")
 
     -- Instantiate LuaFmt with a column limit of 80
     local luaFmtInstance = LuaFmt:new(80)
+    local viewInstance = View:getInstance()
 
     local function formatBuffer()
         local model = Avim:getInstance()
@@ -29,7 +31,9 @@ local function init(components)
             -- Update the status bar to indicate success
             model:updateStatusBar("Buffer formatted successfully!")
         else
-            model:updateStatusBar("Error: Failed to format buffer. " .. (formattedBuffer or "Unknown error"))
+            -- Display the error message in a popup window
+            local errorMessage = "Error: Failed to format buffer. " .. (formattedBuffer or "Unknown error")
+            viewInstance:showPopup(errorMessage)
         end
     end
 
