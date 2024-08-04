@@ -412,14 +412,25 @@ function View:showAutocompleteWindow(suggestions)
     return Model.autocompleteWindow
 end
 function View:refreshScreen()
-    -- Mark all lines as dirty
+    -- Mark all lines as dirty except the status bar
     local totalLines = #Model.buffer
-    for i = 1, totalLines do
+    local adjustedHeight = SCREENHEIGHT - Model.statusBarHeight
+    
+    for i = 1, adjustedHeight do
         Model:markDirty(i)
     end
 
-    -- Redraw the entire screen
-    self:drawScreen()
+    -- Redraw only the main text area of the screen
+    if self.activeWindow then
+        self.activeWindow:show()
+    else
+        for lineNumber in pairs(Model.dirtyLines) do
+            self:drawLine(lineNumber)
+        end
+    end
+
+    Model:clearDirtyLines()
+    term.setCursorBlink(true)
 end
 
 function View:getAvailableWidth()

@@ -433,14 +433,14 @@ function Avim:switchMode(mode, initialCommand, autoExecute)
     -- Additional resets can be added here if needed
     -- For example, reset search highlight, visual selection, etc.
 
+    local view = getView()
     if mode == "command" then
         local commandHandler = require("CommandHandler"):getInstance()
         -- Pass initialCommand and autoExecute, even if initialCommand is nil
-        commandHandler:handleCommandInput(self, getView(), initialCommand, autoExecute)
+        commandHandler:handleCommandInput(self, view, initialCommand, autoExecute)
     end
 
-    -- Update the status bar to reflect the mode change
-    self:updateStatusBar(mode .. " mode")
+    view:refreshScreen()
 end
 
 -- Save the current state to history
