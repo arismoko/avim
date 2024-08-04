@@ -423,6 +423,12 @@ end)
 CommandHandler:map("qa", function()
     Model.shouldExit = true
 end)
+CommandHandler:map("save_file", function()
+    Model:saveFile()
+end)
+CommandHandler:map("w", function()
+    Model:saveFile()
+end)
 
 CommandHandler:map("show_keybindings", function()
     local keyHandler = KeyHandler:getInstance() -- Ensure instance is initialized
