@@ -379,9 +379,6 @@ end
 
 -- Render tokens into formatted code
 function LuaFmt:renderTokens(tree, column, indent, buffer)
-    assert(tree and tree.children, "Invalid syntax tree provided")
-    assert(type(column) == "number" and type(indent) == "number")
-
     if tree.tag == "group" then
         return self:renderGroup(tree, column, indent, buffer)
     end
