@@ -30,7 +30,7 @@ function Avim:new()
             dirtyLines = {}, -- Added initialization for dirtyLines
             allow_horizontal_scroll = true,  -- New flag for enabling/disabling horizontal scroll
             horizontalScrollOffset = 0,  -- Scroll offset for horizontal scrolling
-            maxVisibleColumns = SCREENWIDTH -- Width of the text area in characters
+            maxVisibleColumns = SCREENWIDTH, -- Width of the text area in characters
         }
         setmetatable(instance, Avim)
     end
@@ -177,7 +177,6 @@ function Avim:saveFile()
 end
 
 function Avim:updateScroll()
-
     local adjustedHeight = SCREENHEIGHT - self.statusBarHeight
     local oldScrollOffset = self.scrollOffset
     local oldHorizontalScrollOffset = self.horizontalScrollOffset
@@ -193,10 +192,15 @@ function Avim:updateScroll()
     -- Horizontal scrolling
     if self.allow_horizontal_scroll then
         local cursorLine = self.buffer[self.cursorY] or ""
+        local visibleWidth = self.maxVisibleColumns
+
+        -- Scroll left if the cursor is before the visible area
         if self.cursorX < self.horizontalScrollOffset + 1 then
             self.horizontalScrollOffset = math.max(0, self.cursorX - 1)
-        elseif self.cursorX > self.horizontalScrollOffset + self.maxVisibleColumns then
-            self.horizontalScrollOffset = math.min(self.cursorX - self.maxVisibleColumns, #cursorLine - self.maxVisibleColumns)
+
+        -- Scroll right if the cursor is past the visible area
+        elseif self.cursorX > self.horizontalScrollOffset + visibleWidth then
+            self.horizontalScrollOffset = math.min(self.cursorX - visibleWidth, #cursorLine - visibleWidth)
         end
     end
 
@@ -212,6 +216,8 @@ function Avim:updateScroll()
 
     return false -- Indicate that the scroll offset did not change
 end
+
+
 
 
 -- Function to mark all visible lines as dirty
