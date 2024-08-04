@@ -304,11 +304,13 @@ function LuaFmt:groupTokens(tokens)
         token.headTag = token.tag
         assert(token.headText)
         if OPENS[token.tag] then
+            print("Opening context for:", token.tag)
             table.insert(stack, context)
             local newContext = { tag = OPENS[token.tag], children = { token } }
             table.insert(context.children, newContext)
             context = newContext
         elseif CLOSES[token.tag] then
+            print("Closing context for:", token.tag)
             if context.tag ~= CLOSES[token.tag] then
                 error(string.format("Mismatched close token '%s' on line %d, expected context '%s'", 
                     token.text, token.line, context.tag))
@@ -321,6 +323,7 @@ function LuaFmt:groupTokens(tokens)
             context = table.remove(stack)
             assert(context)
         else
+            print("Adding token to current context:", token.tag)
             table.insert(context.children, token)
         end
     end
@@ -329,10 +332,10 @@ function LuaFmt:groupTokens(tokens)
         error("Unclosed contexts in stack at the end of grouping")
     end
 
-    -- Debugging output to inspect the final context
     print("Final context structure:", context.tag, #context.children)
     return context
 end
+
 
 function LuaFmt:matchRule(rule, a, b)
     assert(type(rule) == "table")
