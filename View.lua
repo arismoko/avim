@@ -246,35 +246,29 @@ function View:showPopup(message)
         error("SCREENWIDTH must be a number")
     end
 
-    -- Define padding and maximum width for the popup
+    -- Define padding and initialize popup dimensions
     local padding = 2
-    local maxPopupWidth = SCREENWIDTH - 4
-
-    -- Word wrap the message based on maxPopupWidth minus padding
-    local effectiveMaxWidth = maxPopupWidth - padding * 2
-
+    local popupWidth = 0
+    local popupHeight = 2  -- Start with 2 to account for the top and bottom borders
     local lines = {}
-    local currentLine = ""
+    
+    -- Calculate initial popup width based on the first word
     for word in message:gmatch("%S+") do
-        if #currentLine + #word + 1 > effectiveMaxWidth then
-            table.insert(lines, currentLine)
-            currentLine = word
+        if #lines == 0 or #lines[#lines] + #word + 1 > popupWidth - padding * 2 then
+            table.insert(lines, word)
+            popupHeight = popupHeight + 1
         else
-            if currentLine ~= "" then
-                currentLine = currentLine .. " "
-            end
-            currentLine = currentLine .. word
+            lines[#lines] = lines[#lines] .. " " .. word
         end
-    end
-    if currentLine ~= "" then
-        table.insert(lines, currentLine)
+        popupWidth = math.max(popupWidth, #lines[#lines] + padding * 2)
     end
 
-    -- Determine popup dimensions
-    local popupWidth = math.min(maxPopupWidth, effectiveMaxWidth + padding * 2)
-    local popupHeight = #lines + 2
+    -- Ensure the popup doesn't exceed the screen width
+    popupWidth = math.min(popupWidth, SCREENWIDTH - 4)
+    
+    -- Determine the popup position
     local popupX = math.floor((SCREENWIDTH - popupWidth) / 2)
-    local popupY = math.floor((SCREENHEIGHT - popupHeight) )
+    local popupY = math.floor((SCREENHEIGHT - popupHeight) / 2)
 
     -- Create and display the popup window
     local window = self:createWindow(popupX, popupY, popupWidth, popupHeight, colorMatch.popupBG, colorMatch.popupFont)
