@@ -4,7 +4,6 @@ local function printHelp()
 	print("\t\tto print formatted version to standard out")
 	print("usage:\n\tlua " .. arg[0] .. " --f <lua file> [column hint]")
 	print("\t\tto reformat the file in-place")
-	os.exit(1)
 end
 
 setmetatable(_G, {
