@@ -190,6 +190,7 @@ function LuaFmt:tokenize(buffer)
     end
     return tokens
 end
+
 function LuaFmt:filterBlanks(tokens)
     -- Adjust token stream to manage blanks, comments, and block delimiters
     local NO_BLANK_AFTER = {
@@ -281,7 +282,6 @@ function LuaFmt:filterBlanks(tokens)
     return filtered
 end
 
--- Grouping tokens into structures
 function LuaFmt:groupTokens(tokens)
     local OPENS = {
         ["if"] = "code", ["while"] = "code", ["for"] = "code", ["lone-do"] = "code",
@@ -330,6 +330,7 @@ function LuaFmt:groupTokens(tokens)
 
     return context
 end
+
 function LuaFmt:matchRule(rule, a, b)
     assert(type(rule) == "table")
     return self:matchLeft(rule[1], a) and self:matchRight(rule[2], b)
@@ -355,6 +356,7 @@ end
 
 -- Rendering tokens back into a formatted buffer
 function LuaFmt:renderTokens(tree, column, indent, buffer)
+    assert(tree and tree.children, "Invalid syntax tree provided")
     assert(type(column) == "number")
     assert(type(indent) == "number")
 
@@ -576,6 +578,7 @@ function LuaFmt:formatBuffer(buffer)
 
     -- Group the tokens into a syntax tree
     local tree = self:groupTokens(tokens)
+    assert(tree and tree.children, "Invalid syntax tree structure")
 
     -- Render the formatted buffer from the syntax tree
     local formattedBuffer = self:renderTokens(tree, 0, 0, {})
@@ -583,6 +586,5 @@ function LuaFmt:formatBuffer(buffer)
     -- Return the formatted buffer
     return formattedBuffer
 end
-
 
 return LuaFmt
