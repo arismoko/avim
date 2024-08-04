@@ -8,7 +8,7 @@
 - **Custom Keybindings**: Map your own keybindings in different modes to create a personalized workflow.
 - **Plugins**: AVIM supports plugins, allowing users to extend its functionality.
 - **Command Execution**: Use the command mode to execute commands, search, and replace text.
-- **Visual Mode**: Select and manipulate text blocks with ease.
+- **Syntax Highlighting**: AVIM has autocompletion and syntax highlighting built right in!
 
 ## Getting Started
 
