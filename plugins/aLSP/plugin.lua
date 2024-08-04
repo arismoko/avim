@@ -3,7 +3,7 @@ local function init(components)
     local KeyHandler = components.KeyHandler
 
     -- Load DumbLuaParser
-    local parser = require("dumbParser")
+    local parser = require("plugins.aLSP.dumbParser")
 
     local function formatBuffer()
         local model = Avim:getInstance()
