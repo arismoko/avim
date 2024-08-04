@@ -274,7 +274,7 @@ function View:showPopup(message)
     local popupWidth = math.min(maxPopupWidth, effectiveMaxWidth + padding * 2)
     local popupHeight = #lines + 2
     local popupX = math.floor((SCREENWIDTH - popupWidth) / 2)
-    local popupY = math.floor((SCREENHEIGHT - popupHeight) / 2)
+    local popupY = math.floor((SCREENHEIGHT - popupHeight) )
 
     -- Create and display the popup window
     local window = self:createWindow(popupX, popupY, popupWidth, popupHeight, colorMatch.popupBG, colorMatch.popupFont)
