@@ -250,10 +250,9 @@ function View:showPopup(message)
     local padding = 2
     local maxPopupWidth = SCREENWIDTH - 4
 
-    -- Adjust maxPopupWidth to account for padding in the display
+    -- Word wrap the message based on maxPopupWidth minus padding
     local effectiveMaxWidth = maxPopupWidth - padding * 2
 
-    -- Word wrap the message based on effectiveMaxWidth
     local lines = {}
     local currentLine = ""
     for word in message:gmatch("%S+") do
@@ -261,7 +260,10 @@ function View:showPopup(message)
             table.insert(lines, currentLine)
             currentLine = word
         else
-            currentLine = currentLine == "" and word or currentLine .. " " .. word
+            if currentLine ~= "" then
+                currentLine = currentLine .. " "
+            end
+            currentLine = currentLine .. word
         end
     end
     if currentLine ~= "" then
@@ -269,13 +271,13 @@ function View:showPopup(message)
     end
 
     -- Determine popup dimensions
-    local popupWidth = math.min(maxPopupWidth, #lines[1] + padding * 2)
+    local popupWidth = math.min(maxPopupWidth, effectiveMaxWidth + padding * 2)
     local popupHeight = #lines + 2
     local popupX = math.floor((SCREENWIDTH - popupWidth) / 2)
     local popupY = math.floor((SCREENHEIGHT - popupHeight) / 2)
 
     -- Create and display the popup window
-    local window = self:createWindow(popupX, popupY, popupWidth, popupHeight, colors.lightGray, colors.black)
+    local window = self:createWindow(popupX, popupY, popupWidth, popupHeight, colorMatch.popupBG, colorMatch.popupFont)
     window:clear()
     window:writeline(string.rep("-", popupWidth))
 
@@ -289,6 +291,7 @@ function View:showPopup(message)
     os.pullEvent("key")
     window:close()
 end
+
 
 
 
