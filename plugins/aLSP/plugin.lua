@@ -3,9 +3,9 @@ local function init(components)
     local KeyHandler = components.KeyHandler
 
     -- Load LCF (Lua Code Formatter)
-    local lcf = require('plugins.aLSP.lcf.workshop.base')
-    local get_ast = lcf.request('!.lua.code.get_ast')
-    local get_formatted_code = lcf.request('!.lua.code.ast_as_code')
+    require('lcf.workshop.base')
+    local get_ast = request('!.lua.code.get_ast')
+    local get_formatted_code = request('!.lua.code.ast_as_code')
 
     local function formatBuffer()
         local model = Avim:getInstance()
