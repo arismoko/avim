@@ -210,8 +210,7 @@ function Avim:updateScroll()
     -- Mark all visible lines as dirty if the scroll offset changes
     if self.scrollOffset ~= oldScrollOffset or self.horizontalScrollOffset ~= oldHorizontalScrollOffset then
         local view = getView()
-        self:markAllVisibleLinesDirty(adjustedHeight)
-        view:drawScreen()  -- Ensure the screen is fully redrawn
+        view:refreshScreen()
         return true -- Indicate that the scroll offset was updated
     end
 
