@@ -274,12 +274,12 @@ function View:showPopup(message)
         table.insert(lines, currentLine)
     end
 
-    -- Split any line over 40 characters into 4-character parts
+    -- Split any line over 40 characters into 40-character parts
     local splitLines = {}
     for _, line in ipairs(lines) do
         if #line > 40 then
-            for i = 1, #line, 4 do
-                table.insert(splitLines, line:sub(i, i + 3))
+            for i = 1, #line, 40 do
+                table.insert(splitLines, line:sub(i, i + 39))
             end
         else
             table.insert(splitLines, line)
@@ -313,6 +313,7 @@ function View:showPopup(message)
     os.pullEvent("key")
     window:close()
 end
+
 
 
 
