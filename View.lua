@@ -241,12 +241,6 @@ function View:closeAllWindows()
 end
 
 function View:showPopup(message)
-    -- Ensure SCREENWIDTH is a valid number
-    if type(SCREENWIDTH) ~= "number" then
-        error("SCREENWIDTH must be a number")
-    end
-
-    -- Define padding and initialize popup dimensions
     local padding = 2
     local maxPopupWidth = SCREENWIDTH - 4  -- Max possible width with some margin
     local effectiveMaxWidth = maxPopupWidth - padding * 2
@@ -274,16 +268,14 @@ function View:showPopup(message)
         table.insert(lines, currentLine)
     end
 
-    -- Split any line over 40 characters into 40-character parts
+    -- Handle cases where a line might exceed the effective max width
     local splitLines = {}
     for _, line in ipairs(lines) do
-        if #line > 40 then
-            for i = 1, #line, 40 do
-                table.insert(splitLines, line:sub(i, i + 39))
-            end
-        else
-            table.insert(splitLines, line)
+        while #line > effectiveMaxWidth do
+            table.insert(splitLines, line:sub(1, effectiveMaxWidth))
+            line = line:sub(effectiveMaxWidth + 1)
         end
+        table.insert(splitLines, line)
     end
     lines = splitLines
 

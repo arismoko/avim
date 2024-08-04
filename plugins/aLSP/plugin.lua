@@ -31,8 +31,10 @@ local function init(components)
             -- Update the status bar to indicate success
             model:updateStatusBar("Buffer formatted successfully!")
         else
-            -- Display the error message in a popup window
+            -- Capture the error message from pcall
             local errorMessage = "Error: Failed to format buffer. " .. (formattedBuffer or "Unknown error")
+
+            -- Adjust the popup to handle longer messages
             viewInstance:showPopup(errorMessage)
         end
     end
