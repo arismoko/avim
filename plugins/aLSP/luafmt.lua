@@ -63,16 +63,8 @@ function LuaFmt:initTokens()
         function(text, offset)
             local quote = text:sub(offset, offset)
             if quote == "\"" or quote == "'" then
-                local back = false
-                for i = offset + 1, #text do
-                    if back then
-                        back = false
-                    elseif text:sub(i, i) == "\\" then
-                        back = true
-                    elseif text:sub(i, i) == quote then
-                        return i, "string"
-                    end
-                end
+                local _, endPos = text:find(quote .. "([^" .. quote .. "\\]*\\.[^" .. quote .. "\\]*)*" .. quote, offset)
+                return endPos, "string"
             end
         end,
         function(text, offset)
@@ -204,12 +196,6 @@ function LuaFmt:filterBlanks(tokens)
     local wasObject = false
 
     for _, token in ipairs(tokens) do
-        -- Do not use strict metatable enforcement here
-        -- Allow tokens to have keys added dynamically later
-        -- token = setmetatable(token, {__index = function(_, k)
-        --     error("No such key: " .. tostring(k))
-        -- end})
-
         if token.tag == "do" then
             if not forControl then
                 table.insert(filtered, {
@@ -285,59 +271,43 @@ end
 function LuaFmt:groupTokens(tokens)
     local OPENS = {
         ["if"] = "code", ["while"] = "code", ["for"] = "code", ["lone-do"] = "code",
-        ["function"] = "code", ["open"] = "group",
+        ["function"] = "code", ["open"] = "group", ["("] = "group",
     }
 
     local CLOSES = {
-        ["end"] = "code", ["close"] = "group",
+        ["end"] = "code", ["close"] = "group", [")"] = "group",
     }
 
-    local context = { tag = "code", children = {} }
-    local stack = {}
+    local contextStack = { { tag = "root", children = {} } }
+    local currentContext = contextStack[#contextStack]
 
     for _, token in ipairs(tokens) do
-        print("Grouping token:", token.text, token.tag)  -- Debugging output
-        assert(token.text)
-        token.headText = token.text
-        token.tailText = token.text
-        token.tailTag = token.tag
-        token.headTag = token.tag
-        assert(token.headText)
-        
         if OPENS[token.tag] then
-            print("Opening context for:", token.tag)
-            table.insert(stack, context)
-            local newContext = { tag = OPENS[token.tag], children = { token } }
-            table.insert(context.children, newContext)
-            context = newContext
+            -- Create a new context for blocks or groups
+            local newContext = { tag = OPENS[token.tag], children = {token}, parent = currentContext }
+            table.insert(currentContext.children, newContext)
+            table.insert(contextStack, newContext)
+            currentContext = newContext
         elseif CLOSES[token.tag] then
-            print("Closing context for:", token.tag)
-            if context.tag ~= CLOSES[token.tag] then
-                error(string.format("Mismatched close token '%s' on line %d, expected context '%s'", 
-                    token.text, token.line, context.tag))
+            -- Close the current context and check for mismatch
+            if currentContext.tag == CLOSES[token.tag] then
+                currentContext = table.remove(contextStack)
+                table.insert(currentContext.children, token)
+            else
+                error(string.format("Mismatched context close for '%s' at token '%s'", currentContext.tag, token.text))
             end
-            table.insert(context.children, token)
-            context.tailTag = context.children[#context.children].tailTag
-            context.tailText = context.children[#context.children].tailText
-            context.headTag = context.children[1].headTag
-            context.headText = context.children[1].headText
-            context = table.remove(stack)
-            assert(context)
         else
-            print("Adding token to current context:", token.tag)
-            table.insert(context.children, token)
+            -- Add the token to the current context
+            table.insert(currentContext.children, token)
         end
     end
 
-    if #stack > 0 then
-        error("Unclosed contexts in stack at the end of grouping")
+    if #contextStack > 1 then
+        error("Unclosed contexts remain in the stack at the end of grouping")
     end
 
-    print("Final context structure:", context.tag, #context.children)
-    return context
+    return contextStack[1] -- Return the root of the context tree
 end
-
-
 
 function LuaFmt:matchRule(rule, a, b)
     assert(type(rule) == "table")
@@ -364,6 +334,7 @@ end
 
 -- Rendering tokens back into a formatted buffer
 function LuaFmt:renderTokens(tree, column, indent, buffer)
+    assert(tree and tree.children, "Invalid syntax tree provided")
     assert(type(column) == "number")
     assert(type(indent) == "number")
 
