@@ -240,38 +240,49 @@ function View:closeAllWindows()
     self:refreshScreen()
 end
 
-function View:showPopup(message)
-    -- Get the dimensions of the screen
-    local screenWidth, screenHeight = term.getSize()
+function View:validateScreenWidth()
+    if type(SCREENWIDTH) ~= "number" then
+        error("SCREENWIDTH must be a number")
+    end
+end
 
-    -- Create a full-screen window
-    local window = self:createWindow(1, 1, screenWidth, screenHeight, colors.lightGray, colors.black)
-
-    -- Clear the window and write the error message
-    window:clear()
-
-    -- Split the message into lines that fit within the screen width
+function View:splitMessageIntoLines(message, width)
     local lines = {}
-    for i = 1, #message, screenWidth do
-        table.insert(lines, message:sub(i, i + screenWidth - 1))
+    for i = 1, #message, width do
+        table.insert(lines, message:sub(i, i + width - 1))
     end
+    return lines
+end
 
-    -- Write the message lines in the center of the screen
-    local startY = math.floor((screenHeight - #lines) / 2)
-    for i, line in ipairs(lines) do
-        local startX = math.floor((screenWidth - #line) / 2)
-        window:writeText(startX, startY + i, line)
+function View:calculatePopupDimensions(lines)
+    local popupWidth = SCREENWIDTH - 4
+    local popupHeight = math.min(#lines + 2, SCREENHEIGHT - 4)
+    local popupX = math.floor((SCREENWIDTH - popupWidth) / 2)
+    local popupY = math.floor((SCREENHEIGHT - popupHeight) / 2)
+    return popupWidth, popupHeight, popupX, popupY
+end
+
+function View:drawPopupWindow(window, lines, popupWidth)
+    window:clear()
+    window:writeline(string.rep("-", popupWidth - 2))
+    for _, line in ipairs(lines) do
+        window:writeline("| " .. line .. string.rep(" ", popupWidth - #line - 3) .. "|")
     end
+    window:writeline(string.rep("-", popupWidth - 2))
+end
 
-    -- Show the window
-    window:show()
+function View:showPopup(message)
+    self:validateScreenWidth()
 
-    -- Wait for a key event to close the window
+    local lines = self:splitMessageIntoLines(message, SCREENWIDTH)
+    local popupWidth, popupHeight, popupX, popupY = self:calculatePopupDimensions(lines)
+
+    local window = self:createWindow(popupX, popupY, popupWidth, popupHeight, colors.lightGray, colors.black)
+    self:drawPopupWindow(window, lines, popupWidth)
+
     os.pullEvent("key")
     window:close()
 end
-
-
 
 function View:drawScreen()
     if self.activeWindow then
