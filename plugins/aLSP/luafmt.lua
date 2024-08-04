@@ -5,20 +5,12 @@ function LuaFmt:new(columnLimit)
     local self = setmetatable({}, LuaFmt)
     self.COLUMN_LIMIT = columnLimit or 80
     self.TAB_COLUMNS = 4
+    self:initSpecialRepresentation()
+    self:initTokens()
     return self
 end
 
-function LuaFmt:printHelp()
-    return [[
-usage:
-    lua <lua file> [column hint]
-        to print formatted version to standard out
-usage:
-    lua --f <lua file> [column hint]
-        to reformat the file in-place
-]]
-end
-
+-- Special representations for certain characters
 function LuaFmt:initSpecialRepresentation()
     local specialRepresentation = {
         ["\a"] = [[\a]],
@@ -48,36 +40,7 @@ function LuaFmt:initSpecialRepresentation()
     self.specialRepresentation = specialRepresentation
 end
 
-function LuaFmt:showAdd(object, indent, out)
-    if indent > 10 then
-        table.insert(out, "...")
-    elseif type(object) == "string" then
-        table.insert(out, [["]])
-        for character in object:gmatch(".") do
-            table.insert(out, self.specialRepresentation[character] or character)
-        end
-        table.insert(out, [["]])
-    elseif type(object) == "table" or type(object) == "userdata" then
-        table.insert(out, "{")
-        for key, value in pairs(object) do
-            table.insert(out, "\n" .. string.rep("\t", indent) .. "\t[")
-            self:showAdd(key, indent + 1, out)
-            table.insert(out, "] = ")
-            self:showAdd(value, indent + 1, out)
-            table.insert(out, ",")
-        end
-        table.insert(out, "\n" .. string.rep("\t", indent) .. "}")
-    else
-        table.insert(out, tostring(object))
-    end
-end
-
-function LuaFmt:show(value)
-    local out = {}
-    self:showAdd(value, 0, out)
-    return table.concat(out)
-end
-
+-- Matcher for token recognition
 function LuaFmt:matcher(pattern, tag)
     assert(type(tag) == "string")
     return function(text, offset)
@@ -88,6 +51,7 @@ function LuaFmt:matcher(pattern, tag)
     end
 end
 
+-- Token initialization and classification
 function LuaFmt:initTokens()
     local IS_KEYWORD = {
         ["if"] = true, ["then"] = true, ["elseif"] = true, ["else"] = true, ["end"] = true,
@@ -194,125 +158,40 @@ function LuaFmt:initTokens()
     self.TOKENS = TOKENS
 end
 
-function LuaFmt:tokenize(blob)
-    assert(type(blob) == "string")
+-- Tokenization process for buffer (list of lines)
+function LuaFmt:tokenize(buffer)
+    assert(type(buffer) == "table", "Expected buffer to be a table")
     local tokens = {}
-    local offset = 1
-    while offset < #blob do
-        local didCut = false
-        for _, t in ipairs(self.TOKENS) do
-            local cut, tag = t(blob, offset)
-            if cut then
-                assert(type(cut) == "number")
-                assert(cut >= offset)
-                assert(tag)
-                if tag ~= "whitespace" then
-                    table.insert(tokens, {
-                        tag = tag,
-                        text = blob:sub(offset, cut),
-                        offset = offset,
-                    })
+    for lineNumber, line in ipairs(buffer) do
+        local offset = 1
+        while offset <= #line do
+            local didCut = false
+            for _, t in ipairs(self.TOKENS) do
+                local cut, tag = t(line, offset)
+                if cut then
+                    assert(type(cut) == "number")
+                    assert(cut >= offset)
+                    assert(tag)
+                    if tag ~= "whitespace" then
+                        table.insert(tokens, {
+                            tag = tag,
+                            text = line:sub(offset, cut),
+                            offset = offset,
+                            line = lineNumber,  -- Include line number in the token
+                        })
+                    end
+                    offset = cut + 1
+                    didCut = true
+                    break
                 end
-                offset = cut + 1
-                didCut = true
-                break
             end
+            assert(didCut, line:sub(offset, offset + 50))
         end
-        assert(didCut, blob:sub(offset, offset + 50))
     end
     return tokens
 end
 
-function LuaFmt:catchGap(obj)
-    local out = {}
-    for k, v in pairs(obj) do
-        out[k] = v
-    end
-    return setmetatable(out, {
-        __index = function(_, key)
-            if obj[key] == nil then
-                error("no such key `" .. tostring(key) .. "`", 2)
-            end
-            return obj[key]
-        end,
-    })
-end
-
-function LuaFmt:filterBlanks(tokens)
-    local NO_BLANK_AFTER = {
-        ["do"] = true, ["lone-do"] = true, ["then"] = true, ["else"] = true,
-        ["open"] = true, ["function-close"] = true,
-    }
-
-    local out = {}
-    local forFunction = false
-    local forControl = false
-    local wasObject = false
-    for _, token in ipairs(tokens) do
-        token = self:catchGap(token)
-
-        if token.tag == "do" then
-            if not forControl then
-                table.insert(out, self:catchGap { tag = "lone-do", text = token.text })
-            else
-                table.insert(out, token)
-                forControl = false
-            end
-        elseif token.tag == "for" then
-            table.insert(out, token)
-            forControl = true
-        elseif token.tag == "while" then
-            table.insert(out, token)
-            forControl = true
-        elseif token.tag == "function" then
-            forFunction = true
-            table.insert(out, token)
-        elseif token.tag == "comment" then
-            if out[#out] and out[#out].tag == "blank" then
-            elseif out[#out] and out[#out].tag == "comment" then
-            elseif out[#out] and not NO_BLANK_AFTER[out[#out].tag] then
-                table.insert(out, self:catchGap { tag = "blank", text = "\n\n" })
-            end
-            table.insert(out, token)
-        elseif token.tag == "close" then
-            if out[#out] and out[#out].tag == "blank" then
-                table.remove(out)
-            end
-            if forFunction then
-                forFunction = false
-                table.insert(out, self:catchGap { tag = "function-close", text = token.text })
-            else
-                table.insert(out, token)
-            end
-        elseif token.tag == "open" then
-            if forFunction then
-                table.insert(out, self:catchGap { tag = "function-open", text = token.text })
-            else
-                table.insert(out, token)
-            end
-        elseif token.tag == "blank" then
-            if #out > 0 then
-                if not NO_BLANK_AFTER[out[#out].tag] then
-                    table.insert(out, token)
-                end
-            end
-        elseif token.text == "-" and not wasObject then
-            table.insert(out, { tag = "unm", text = token.text })
-        else
-            if #out > 0 and out[#out].tag == "blank" then
-                if token.tag == "end" or token.tag == "else" or token.tag == "elseif" or token.tag == "until" then
-                    table.remove(out)
-                end
-            end
-            table.insert(out, token)
-        end
-
-        wasObject = token.tag == "close" or token.tag == "number" or token.tag == "word" or token.tag == "string"
-    end
-
-    return out
-end
-
+-- Grouping tokens into structures
 function LuaFmt:groupTokens(tokens)
     local OPENS = {
         ["if"] = "code", ["while"] = "code", ["for"] = "code", ["lone-do"] = "code",
@@ -340,10 +219,9 @@ function LuaFmt:groupTokens(tokens)
             context = newContext
         elseif CLOSES[token.tag] then
             if context.tag ~= CLOSES[token.tag] then
-                print("Mismatched close token:", token.text, "Expected context:", context.tag)
-                print("Stack:", stack)
+                error(string.format("Mismatched close token '%s' on line %d, expected context '%s'", 
+                    token.text, token.line, context.tag))
             end
-            assert(context.tag == CLOSES[token.tag])
             table.insert(context.children, token)
             context.tailTag = context.children[#context.children].tailTag
             context.tailText = context.children[#context.children].tailText
@@ -357,39 +235,14 @@ function LuaFmt:groupTokens(tokens)
     end
 
     if #stack > 0 then
-        print("Unclosed contexts in stack:", stack)
+        error("Unclosed contexts in stack at the end of grouping")
     end
 
-    assert(#stack == 0)
     return context
 end
 
-
-function LuaFmt:matchLeft(m, t)
-    assert(type(m) == "string")
-    if m == "*" then
-        return true
-    elseif m:sub(1, 1) == "`" then
-        return m:sub(2) == t.tailText
-    end
-    return m == t.tailTag
-end
-
-function LuaFmt:matchRight(m, t)
-    assert(type(m) == "string")
-    if m == "*" then
-        return true
-    elseif m:sub(1, 1) == "`" then
-        return m:sub(2) == t.headText
-    end
-    return m == t.headTag
-end
-
-function LuaFmt:matchRule(rule, a, b)
-    return self:matchLeft(rule[1], a) and self:matchRight(rule[2], b)
-end
-
-function LuaFmt:renderTokens(tree, column, indent)
+-- Rendering tokens back into a formatted buffer
+function LuaFmt:renderTokens(tree, column, indent, buffer)
     assert(type(column) == "number")
     assert(type(indent) == "number")
 
@@ -428,7 +281,7 @@ function LuaFmt:renderTokens(tree, column, indent)
     }
 
     local function renderCode(tree, column, indent)
-        local out = ""
+        local buffer = buffer or {}
         for i, child in ipairs(tree.children) do
             local space = ""
             local previous = tree.children[i - 1]
@@ -462,21 +315,25 @@ function LuaFmt:renderTokens(tree, column, indent)
             if child.headTag == "blank" then
                 space = space:gsub("[^\n]", "")
             end
-            out = out .. space
+            if #buffer == 0 or space:find("\n") then
+                table.insert(buffer, space:match("[^\n]*"))
+            else
+                buffer[#buffer] = buffer[#buffer] .. space
+            end
+
             local finalLineLength = 2 * self.COLUMN_LIMIT
-            local finalLine = out:match("[^\n]*$")
+            local finalLine = buffer[#buffer]:match("[^\n]*$")
             if #finalLine < finalLineLength then
                 finalLineLength = #finalLine:gsub("\t", string.rep(" ", self.TAB_COLUMNS))
             end
-            out = out .. self:renderTokens(child, finalLineLength, indent)
+
+            buffer = self:renderTokens(child, finalLineLength, indent, buffer)
         end
-        return out
+        return buffer
     end
 
     local function renderObject(tree, column, indent, sepBreak)
-        assert(type(sepBreak) == "boolean")
-        assert(type(indent) == "number")
-        local out = ""
+        local buffer = buffer or {}
         for i, child in ipairs(tree.children) do
             local previous = tree.children[i - 1]
             local space = ""
@@ -519,21 +376,24 @@ function LuaFmt:renderTokens(tree, column, indent)
             if child.headTag == "blank" then
                 space = space:gsub("[^\n]", "")
             end
-            out = out .. space
-            local finalLine = out:match("[^\n]*$")
+            if #buffer == 0 or space:find("\n") then
+                table.insert(buffer, space:match("[^\n]*"))
+            else
+                buffer[#buffer] = buffer[#buffer] .. space
+            end
+
+            local finalLine = buffer[#buffer]:match("[^\n]*$")
             local finalLineLength = self.COLUMN_LIMIT * 2
             if #finalLine < finalLineLength then
                 finalLineLength = #finalLine:gsub("\t", string.rep(" ", self.TAB_COLUMNS))
             end
-            local result = self:renderTokens(child, finalLineLength, indent)
-            out = out .. result
+
+            buffer = self:renderTokens(child, finalLineLength, indent, buffer)
         end
-        return out
+        return buffer
     end
 
-    if tree.tag == "code" then
-        return renderCode(tree, column, indent)
-    elseif tree.tag == "group" then
+    if tree.tag == "group" then
         local c = renderObject(tree, column, indent, false)
         local tooLong = (column + #c > self.COLUMN_LIMIT or c:find("\n"))
         local notEmpty = #tree.children > 2
@@ -543,10 +403,10 @@ function LuaFmt:renderTokens(tree, column, indent)
             return renderObject(tree, column, indent, true)
         elseif tooLong and notEmpty then
             if tree.headText == "(" then
-                local lastSeparator = false
+                local lastSeparator = nil  -- Initialize as nil
                 for i = #tree.children, 1, -1 do
                     if tree.children[i].tailTag == "separator" then
-                        lastSeparator = i
+                        lastSeparator = i  -- Store the index of the last separator
                         break
                     end
                 end
@@ -578,20 +438,18 @@ function LuaFmt:renderTokens(tree, column, indent)
             return renderObject(tree, column, indent, true)
         end
         return c
-    elseif tree.tag == "blank" then
-        return ""
     end
-    assert(type(tree.text) == "string")
-    return tree.text
+
+    return renderCode(tree, column, indent)
 end
 
-function LuaFmt:formatLuaCode(inputString, columnLimit)
-    self.COLUMN_LIMIT = columnLimit or self.COLUMN_LIMIT
-    self:initSpecialRepresentation()
-    self:initTokens()
-    local tokens = self:filterBlanks(self:tokenize(inputString))
+-- Format buffer and return the formatted buffer
+function LuaFmt:formatBuffer(buffer)
+    assert(type(buffer) == "table", "Expected buffer to be a table")
+    local tokens = self:filterBlanks(self:tokenize(buffer))
     local tree = self:groupTokens(tokens)
-    return self:renderTokens(tree, 0, 0)
+    local formattedBuffer = self:renderTokens(tree, 0, 0, {})
+    return formattedBuffer
 end
 
 return LuaFmt
