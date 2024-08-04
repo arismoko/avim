@@ -3,7 +3,7 @@ SCREENWIDTH, SCREENHEIGHT = term.getSize()
 
 -- Load core components
 local View = require("View"):getInstance()
-local Model = require("Avim"):getInstance()
+local Avim = require("Avim"):getInstance()
 local KeyHandler = require("KeyHandler"):getInstance()
 local CommandHandler = require("CommandHandler"):getInstance()
 
@@ -47,7 +47,7 @@ local function loadPlugin(pluginName)
             if plugin and plugin.init then
                 plugin.init({
                     View = View,
-                    Model = Model,
+                    Avim = Avim,
                     KeyHandler = KeyHandler,
                     CommandHandler = CommandHandler
                 })
@@ -157,8 +157,8 @@ end
 -- Main event loop
 local function eventLoop()
     View:drawScreen()
-    while not Model.shouldExit do
-        KeyHandler:handleInputEvent(Model.mode, Model, View, CommandHandler)
+    while not Avim.shouldExit do
+        KeyHandler:handleInputEvent(Avim.mode, Avim, View, CommandHandler)
         View:updateCursor()
     end
     term.clear()
@@ -182,21 +182,21 @@ local function handleMainMenu()
         if key == keys.one then
             local filename = handleFileOperation("Enter filename:")
             if filename and filename ~= "" then
-                Model.filename = filename
-                Model:loadFile(Model.filename)
+                Avim.filename = filename
+                Avim:loadFile(Avim.filename)
                 eventLoop()
             end
         elseif key == keys.two then
             local filename = handleFileOperation("Enter filename:")
             if filename and filename ~= "" then
-                Model.filename = filename
-                Model:loadFile(Model.filename)
+                Avim.filename = filename
+                Avim:loadFile(Avim.filename)
                 eventLoop()
             end
         elseif key == keys.three then
             managePlugins()
         elseif key == keys.four then
-            Model.shouldExit = true
+            Avim.shouldExit = true
             return
         end
     end
