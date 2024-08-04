@@ -427,5 +427,5 @@ function View:getAvailableWidth()
     local lineNumberWidth = self:getLineNumberWidth()
     return SCREENWIDTH - lineNumberWidth - 1
 end
-
+term.scroll()
 return View

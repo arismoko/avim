@@ -192,30 +192,31 @@ function Avim:updateScroll()
     -- Horizontal scrolling
     if self.allow_horizontal_scroll then
         local cursorLine = self.buffer[self.cursorY] or ""
-        local visibleWidth = self.maxVisibleColumns
+        local lineNumberWidth = getView():getLineNumberWidth() + 1 -- Add 1 for space between number and text
+        local visibleWidth = self.maxVisibleColumns - lineNumberWidth
 
         -- Scroll left if the cursor is before the visible area
         if self.cursorX < self.horizontalScrollOffset + 1 then
             self.horizontalScrollOffset = math.max(0, self.cursorX - 1)
-
         -- Scroll right if the cursor is past the visible area
         elseif self.cursorX > self.horizontalScrollOffset + visibleWidth then
-            self.horizontalScrollOffset = self.cursorX - visibleWidth
+            self.horizontalScrollOffset = math.max(0, self.cursorX - visibleWidth)
         end
-
-        -- Ensure the horizontal scroll offset does not exceed the line length
-        self.horizontalScrollOffset = math.min(self.horizontalScrollOffset, math.max(0, #cursorLine - visibleWidth))
     end
 
     -- Mark all visible lines as dirty if the scroll offset changes
     if self.scrollOffset ~= oldScrollOffset or self.horizontalScrollOffset ~= oldHorizontalScrollOffset then
         local view = getView()
-        view:refreshScreen()
+        for i = 1, adjustedHeight do
+            self:markDirty(self.scrollOffset + i)
+        end
+        view:drawScreen()  -- Ensure the screen is fully redrawn
         return true -- Indicate that the scroll offset was updated
     end
 
     return false -- Indicate that the scroll offset did not change
 end
+
 
 
 
