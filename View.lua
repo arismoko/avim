@@ -275,10 +275,11 @@ function View:showPopup(message)
     end
 
     -- Calculate the final width and height of the popup
-    local popupWidth = math.min(maxPopupWidth, #currentLine + padding * 2)
+    local popupWidth = 0
     for _, line in ipairs(lines) do
         popupWidth = math.max(popupWidth, #line + padding * 2)
     end
+    popupWidth = math.min(maxPopupWidth, popupWidth)
 
     local popupHeight = #lines + 2  -- 2 extra for the top and bottom borders
     local popupX = math.floor((SCREENWIDTH - popupWidth) / 2)
