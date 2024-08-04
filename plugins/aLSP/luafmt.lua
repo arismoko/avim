@@ -364,7 +364,6 @@ end
 
 -- Rendering tokens back into a formatted buffer
 function LuaFmt:renderTokens(tree, column, indent, buffer)
-    assert(tree and tree.children, "Invalid syntax tree provided")
     assert(type(column) == "number")
     assert(type(indent) == "number")
 
