@@ -304,6 +304,7 @@ end
 
 
 
+
 function View:drawScreen()
     if self.activeWindow then
         self.activeWindow:show()
