@@ -33,7 +33,7 @@ local function init(components)
         else
             -- Capture the error message from pcall
             local errorMessage = "Error: Failed to format buffer. " .. (formattedBuffer or "Unknown error")
-
+            print(errorMessage)
             -- Adjust the popup to handle longer messages
             viewInstance:showPopup(errorMessage)
         end
