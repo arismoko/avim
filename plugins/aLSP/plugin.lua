@@ -36,6 +36,7 @@ local function init(components)
             print(errorMessage)
             -- Adjust the popup to handle longer messages
             viewInstance:showPopup(errorMessage)
+            viewInstance:refreshScreen()
         end
     end
 
