@@ -2,7 +2,6 @@ local function init(components)
     local View = components.View
     local Avim = components.Avim
     local KeyHandler = components.KeyHandler
-    local CommandHandler = components.CommandHandler
 
     local function openFileExplorer()
         -- Get the list of files and directories in the current directory

@@ -13,16 +13,7 @@ local plugins = {}
 
 -- Function to load the plugin configuration
 local function loadPluginConfig()
-    if fs.exists(pluginConfigFile) then
-        plugins = require("plugins.pluginConfig")
-    else
-        -- Default configuration if the file does not exist
-        plugins = {
-            {name = "fileExplorer", enabled = true},
-            -- Add more plugins as needed
-        }
-    end
-
+    plugins = require("plugins.pluginConfig")
     -- Debug info: loaded plugin config
     term.setCursorPos(1, SCREENHEIGHT)
     term.clearLine()
@@ -55,14 +46,14 @@ local function loadPlugin(pluginName)
                 error("Plugin " .. pluginName .. " is missing an init function.")
             end
         end)
+
         if not success then
-            -- Write error to the bottom of the screen
-            term.setCursorPos(1, SCREENHEIGHT)
-            term.clearLine()
-            term.write("Failed to load plugin: " .. pluginName .. " | Error: " .. err)
+            -- Crash the program with an error message
+            error("Failed to load plugin: " .. pluginName .. " | Error: " .. err)
         end
     end
 end
+
 
 -- Function to load all enabled plugins
 local function loadPlugins()
