@@ -538,6 +538,10 @@ function LuaFmt:formatBuffer(buffer)
 
     local tokens = self:filterBlanks(self:tokenize(buffer))
     local tree = self:groupTokens(tokens)
+	print(tree)
+	for i, v in ipairs(tree.children) do
+		print(i, v.tag)
+	end
     local formattedBuffer = self:renderTokens(tree, 0, 0, {})
 
     return formattedBuffer
