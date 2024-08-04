@@ -203,15 +203,17 @@ function LuaFmt:filterBlanks(tokens)
     local wasObject = false
 
     for _, token in ipairs(tokens) do
-        token = setmetatable(token, {__index = function(_, k)
-            error("No such key: " .. tostring(k))
-        end})
+        -- Do not use strict metatable enforcement here
+        -- Allow tokens to have keys added dynamically later
+        -- token = setmetatable(token, {__index = function(_, k)
+        --     error("No such key: " .. tostring(k))
+        -- end})
 
         if token.tag == "do" then
             if not forControl then
-                table.insert(filtered, setmetatable({
+                table.insert(filtered, {
                     tag = "lone-do", text = token.text
-                }, {__index = token}))
+                })
             else
                 table.insert(filtered, token)
                 forControl = false
