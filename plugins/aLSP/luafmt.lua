@@ -190,6 +190,94 @@ function LuaFmt:tokenize(buffer)
     end
     return tokens
 end
+function LuaFmt:filterBlanks(tokens)
+    -- Adjust token stream to manage blanks, comments, and block delimiters
+    local NO_BLANK_AFTER = {
+        ["do"] = true, ["lone-do"] = true, ["then"] = true, ["else"] = true,
+        ["open"] = true, ["function-close"] = true,
+    }
+
+    local filtered = {}
+    local forFunction = false
+    local forControl = false
+    local wasObject = false
+
+    for _, token in ipairs(tokens) do
+        token = setmetatable(token, {__index = function(_, k)
+            error("No such key: " .. tostring(k))
+        end})
+
+        if token.tag == "do" then
+            if not forControl then
+                table.insert(filtered, setmetatable({
+                    tag = "lone-do", text = token.text
+                }, {__index = token}))
+            else
+                table.insert(filtered, token)
+                forControl = false
+            end
+        elseif token.tag == "for" or token.tag == "while" then
+            table.insert(filtered, token)
+            forControl = true
+        elseif token.tag == "function" then
+            forFunction = true
+            table.insert(filtered, token)
+        elseif token.tag == "comment" then
+            if filtered[#filtered] and filtered[#filtered].tag == "blank" then
+                -- Do nothing
+            elseif filtered[#filtered] and filtered[#filtered].tag == "comment" then
+                -- Do nothing
+            elseif filtered[#filtered] and not NO_BLANK_AFTER[filtered[#filtered].tag] then
+                table.insert(filtered, {
+                    tag = "blank", text = "\n\n"
+                })
+            end
+            table.insert(filtered, token)
+        elseif token.tag == "close" then
+            if filtered[#filtered] and filtered[#filtered].tag == "blank" then
+                table.remove(filtered)
+            end
+
+            if forFunction then
+                forFunction = false
+                table.insert(filtered, {
+                    tag = "function-close", text = token.text
+                })
+            else
+                table.insert(filtered, token)
+            end
+        elseif token.tag == "open" then
+            if forFunction then
+                table.insert(filtered, {
+                    tag = "function-open", text = token.text
+                })
+            else
+                table.insert(filtered, token)
+            end
+        elseif token.tag == "blank" then
+            if #filtered > 0 then
+                if not NO_BLANK_AFTER[filtered[#filtered].tag] then
+                    table.insert(filtered, token)
+                end
+            end
+        elseif token.text == "-" and not wasObject then
+            table.insert(filtered, {
+                tag = "unm", text = token.text
+            })
+        else
+            if #filtered > 0 and filtered[#filtered].tag == "blank" then
+                if token.tag == "end" or token.tag == "else" or token.tag == "elseif" or token.tag == "until" then
+                    table.remove(filtered)
+                end
+            end
+            table.insert(filtered, token)
+        end
+
+        wasObject = token.tag == "close" or token.tag == "number" or token.tag == "word" or token.tag == "string"
+    end
+
+    return filtered
+end
 
 -- Grouping tokens into structures
 function LuaFmt:groupTokens(tokens)
@@ -239,6 +327,28 @@ function LuaFmt:groupTokens(tokens)
     end
 
     return context
+end
+function LuaFmt:matchRule(rule, a, b)
+    assert(type(rule) == "table")
+    return self:matchLeft(rule[1], a) and self:matchRight(rule[2], b)
+end
+
+function LuaFmt:matchLeft(m, t)
+    if m == "*" then
+        return true
+    elseif m:sub(1, 1) == "`" then
+        return m:sub(2) == t.tailText
+    end
+    return m == t.tailTag
+end
+
+function LuaFmt:matchRight(m, t)
+    if m == "*" then
+        return true
+    elseif m:sub(1, 1) == "`" then
+        return m:sub(2) == t.headText
+    end
+    return m == t.headTag
 end
 
 -- Rendering tokens back into a formatted buffer
@@ -443,13 +553,34 @@ function LuaFmt:renderTokens(tree, column, indent, buffer)
     return renderCode(tree, column, indent)
 end
 
--- Format buffer and return the formatted buffer
 function LuaFmt:formatBuffer(buffer)
+    -- Check if the buffer is valid
     assert(type(buffer) == "table", "Expected buffer to be a table")
+
+    -- Check for empty buffer
+    if #buffer == 0 then
+        return {}  -- Return an empty table as the formatted buffer
+    end
+
+    -- Validate each line in the buffer
+    for i, line in ipairs(buffer) do
+        if type(line) ~= "string" then
+            error(string.format("Invalid line at index %d: Expected a string, got %s", i, type(line)))
+        end
+    end
+
+    -- Tokenize the buffer
     local tokens = self:filterBlanks(self:tokenize(buffer))
+
+    -- Group the tokens into a syntax tree
     local tree = self:groupTokens(tokens)
+
+    -- Render the formatted buffer from the syntax tree
     local formattedBuffer = self:renderTokens(tree, 0, 0, {})
+
+    -- Return the formatted buffer
     return formattedBuffer
 end
+
 
 return LuaFmt
