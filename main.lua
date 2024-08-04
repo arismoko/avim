@@ -149,11 +149,9 @@ end
 local function eventLoop()
     View:drawScreen()
     while not Avim.shouldExit do
-        term.clear()
         KeyHandler:handleInputEvent(Avim.mode, Avim, View, CommandHandler)
-        View:drawScreen()
         View:updateCursor()
-
+        View:drawScreen()
     end
     term.clear()
     term.setCursorPos(1, 1)
