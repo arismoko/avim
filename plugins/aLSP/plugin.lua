@@ -12,18 +12,14 @@ local function init(components)
         local model = Avim:getInstance()
         local buffer = model.buffer
 
-        -- Convert the buffer into a single Lua script string
-        local luaCode = table.concat(buffer, "\n")
+        -- Format the Lua buffer using luaFmtInstance
+        local status, formattedBuffer = pcall(function()
+            return luaFmtInstance:formatBuffer(buffer)
+        end)
 
-        -- Format the Lua code using luaFmtInstance
-        local formattedLua = luaFmtInstance:formatLuaCode(luaCode)
-
-        if formattedLua then
-            -- Replace the current buffer with the formatted Lua code
-            model.buffer = {}
-            for line in formattedLua:gmatch("([^\n]*)\n?") do
-                table.insert(model.buffer, line)
-            end
+        if status and formattedBuffer then
+            -- Replace the current buffer with the formatted Lua buffer
+            model.buffer = formattedBuffer
 
             -- Mark all lines as dirty to redraw them
             for i = 1, #model.buffer do
@@ -33,7 +29,7 @@ local function init(components)
             -- Update the status bar to indicate success
             model:updateStatusBar("Buffer formatted successfully!")
         else
-            model:updateStatusBar("Error: Failed to format buffer.")
+            model:updateStatusBar("Error: Failed to format buffer. " .. (formattedBuffer or "Unknown error"))
         end
     end
 
