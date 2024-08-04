@@ -542,6 +542,10 @@ function LuaFmt:formatBuffer(buffer)
 	for i, v in ipairs(tree.children) do
 		print(i, v.tag)
 	end
+	if #tree.children == 0 then
+	    print("Tree children is empty")
+	end
+	print("Tree.children before assertion: " .. tree.children .. " " .. #tree.children)
     local formattedBuffer = self:renderTokens(tree, 0, 0, {})
 
     return formattedBuffer
