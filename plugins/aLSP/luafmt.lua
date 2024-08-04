@@ -584,3 +584,5 @@ function LuaFmt:formatLuaCode(inputString, columnLimit)
     local tree = self:groupTokens(tokens)
     return self:renderTokens(tree, 0, 0)
 end
+
+return LuaFmt
