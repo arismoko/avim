@@ -401,6 +401,7 @@ end
 
 function LuaFmt:renderCode(tree, column, indent, buffer)
     for i, child in ipairs(tree.children) do
+		print("Child: ", child.tag)
         local space = self:determineSpace(tree, i, indent)
         buffer = self:appendToBuffer(buffer, space)
         buffer = self:renderTokens(child, column + #space, indent, buffer)
