@@ -27,7 +27,10 @@ function Avim:new()
             mode = "normal",
             statusColor = colors.green, -- Default status bar color
             statusBarHeight = 2, -- Height of the status bar (dynamically tracked)
-            dirtyLines = {} -- Added initialization for dirtyLines
+            dirtyLines = {}, -- Added initialization for dirtyLines
+            allow_horizontal_scroll = true,  -- New flag for enabling/disabling horizontal scroll
+            horizontalScrollOffset = 0,  -- Scroll offset for horizontal scrolling
+            maxVisibleColumns = SCREENWIDTH -- Width of the text area in characters
         }
         setmetatable(instance, Avim)
     end
@@ -176,19 +179,29 @@ end
 function Avim:updateScroll()
 
     local adjustedHeight = SCREENHEIGHT - self.statusBarHeight
-
     local oldScrollOffset = self.scrollOffset
+    local oldHorizontalScrollOffset = self.horizontalScrollOffset
 
+    -- Vertical scrolling
     if self.cursorY < self.scrollOffset + 1 then
         self.scrollOffset = math.max(0, self.cursorY - 1)
     elseif self.cursorY > self.scrollOffset + adjustedHeight then
         self.scrollOffset = math.min(self.cursorY - adjustedHeight, #self.buffer - adjustedHeight)
     end
-
     self.scrollOffset = math.min(self.scrollOffset, math.max(0, #self.buffer - adjustedHeight))
 
+    -- Horizontal scrolling
+    if self.allow_horizontal_scroll then
+        local cursorLine = self.buffer[self.cursorY] or ""
+        if self.cursorX < self.horizontalScrollOffset + 1 then
+            self.horizontalScrollOffset = math.max(0, self.cursorX - 1)
+        elseif self.cursorX > self.horizontalScrollOffset + self.maxVisibleColumns then
+            self.horizontalScrollOffset = math.min(self.cursorX - self.maxVisibleColumns, #cursorLine - self.maxVisibleColumns)
+        end
+    end
+
     -- Mark all visible lines as dirty if the scroll offset changes
-    if self.scrollOffset ~= oldScrollOffset then
+    if self.scrollOffset ~= oldScrollOffset or self.horizontalScrollOffset ~= oldHorizontalScrollOffset then
         local view = getView()
         for i = 1, adjustedHeight do
             self:markDirty(self.scrollOffset + i)

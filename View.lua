@@ -327,9 +327,15 @@ function View:drawLine(y)
 
         term.setTextColor(colors.white)
 
+        local lineToDisplay = Model.buffer[lineIndex]
+
+        if Model.allow_horizontal_scroll then
+            lineToDisplay = lineToDisplay:sub(Model.horizontalScrollOffset + 1, Model.horizontalScrollOffset + Model.maxVisibleColumns)
+        end
+
         if Model.isVisualMode and Model.visualStartY and lineIndex >= math.min(Model.visualStartY, Model.cursorY) and lineIndex <= math.max(Model.visualStartY, Model.cursorY) then
             local startX = 1
-            local endX = #Model.buffer[lineIndex]
+            local endX = #lineToDisplay
             if lineIndex == Model.visualStartY then startX = Model.visualStartX end
             if lineIndex == Model.cursorY then endX = Model.cursorX end
 
@@ -337,9 +343,9 @@ function View:drawLine(y)
                 startX, endX = endX, startX
             end
 
-            local beforeHighlight = Model.buffer[lineIndex]:sub(1, startX - 1)
-            local highlightText = Model.buffer[lineIndex]:sub(startX, endX)
-            local afterHighlight = Model.buffer[lineIndex]:sub(endX + 1)
+            local beforeHighlight = lineToDisplay:sub(1, startX - 1)
+            local highlightText = lineToDisplay:sub(startX, endX)
+            local afterHighlight = lineToDisplay:sub(endX + 1)
 
             term.write(beforeHighlight)
             term.setBackgroundColor(colors.gray)
@@ -347,10 +353,11 @@ function View:drawLine(y)
             term.setBackgroundColor(colors.black)
             term.write(afterHighlight)
         else
-            highlightLine(Model.buffer[lineIndex])
+            highlightLine(lineToDisplay)
         end
     end
 end
+
 
 function View:drawStatusBar()
     local statusBarLines = Model.statusBarHeight
