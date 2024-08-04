@@ -377,7 +377,7 @@ function KeyHandler:handleCharEvent(model, view)
         if event == "char" then
             self:handleCharInput(key, model, view)
             view:refreshScreen()
-            view:updateScroll()
+            model:updateScroll()
         elseif event == "key" then
             -- Refactor to check keyMap in "insert" mode
             local action = self.keyMap[model.mode][keys.getName(key)]
