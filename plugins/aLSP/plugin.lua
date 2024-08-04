@@ -2,8 +2,10 @@ local function init(components)
     local Avim = components.Avim
     local KeyHandler = components.KeyHandler
 
-    -- Load DumbLuaParser
-    local parser = require("plugins.aLSP.dumbParser")
+    -- Load LCF (Lua Code Formatter)
+    local lcf = require('lcf.workshop.base')
+    local get_ast = lcf.request('!.lua.code.get_ast')
+    local get_formatted_code = lcf.request('!.lua.code.ast_as_code')
 
     local function formatBuffer()
         local model = Avim:getInstance()
@@ -12,15 +14,17 @@ local function init(components)
         -- Convert the buffer into a single Lua script string
         local luaCode = table.concat(buffer, "\n")
 
-        -- Tokenize and parse the Lua code
-        local tokens = parser.tokenize(luaCode)
-        local ast = parser.parse(tokens)
+        -- Get the AST from the Lua code
+        local ast = get_ast(luaCode)
 
-        -- Simplify the AST
-        parser.simplify(ast)
-
-        -- Convert the AST back to Lua code (formatted)
-        local formattedLua = parser.toLua(ast, true)
+        -- Format the AST back into Lua code
+        local formattedLua = get_formatted_code(ast, {
+            indent_chunk = '  ',
+            right_margin = 96,
+            max_text_width = math.huge,
+            keep_unparsed_tail = true,
+            keep_comments = true,
+        })
 
         -- Replace the current buffer with the formatted Lua code
         model.buffer = {}
