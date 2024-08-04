@@ -4823,251 +4823,271 @@ local function getAccessesOfDeclaredNames(funcInfos, identInfos, declIdentWatche
 	return declIdentReadCount, declIdentAssignmentCount
 end
 
-local function optimizeReplaceConstants(funcInfos, identInfos, declIdentWatchers, declIdentReadCount, declIdentAssignmentCount, stats)
-    local replacedConstants = false
-
-    for _, funcInfo in ipairs(funcInfos) do
-        for _, declLike in ipairs(funcInfo.declLikes) do
-            if declLike.type == "declaration" then
-                local decl = declLike
-
-                for slot = 1, #decl.names do
-                    local declIdent = decl.names[slot]
-                    local valueExpr = decl.values[slot]
-
-                    if
-                        declIdentAssignmentCount[declIdent] == 0
-                        and declIdentReadCount[declIdent] > 0
-                        and (
-                            (not valueExpr and not (decl.values[1] and isNodeValueList(decl.values[#decl.values])))
-                            or (
-                                valueExpr
-                                and valueExpr.type == "literal"
-                                and not (
-                                    (type(valueExpr.value) == "string" and #valueExpr.value > parser.constantNameReplacementStringMaxLength)
-                                )
-                            )
-                        )
-                    then
-                        local valueLiteral = valueExpr
-                        local valueIsZero  = (valueLiteral ~= nil and valueLiteral.value == 0)
-
-                        for _, watcherIdent in ipairsr(declIdentWatchers[declIdent]) do
-                            if watcherIdent.declaration == declIdent then
-                                local identInfo = identInfos[watcherIdent]
-
-                                if
-                                    identInfo.type == "rvalue"
-                                    and not (valueIsZero and not NORMALIZE_MINUS_ZERO and watcherIdent.parent.type == "unary" and watcherIdent.parent.operator == "-")
-                                then
-                                    local v                  = valueLiteral and valueLiteral.value
-                                    local replacementLiteral = AstLiteral(watcherIdent.token, v)
-
-                                    unregisterWatchersBeforeNodeRemoval(identInfos, declIdentWatchers, watcherIdent, declIdentReadCount, declIdentAssignmentCount, funcInfos, funcInfo, stats, false)
-                                    replace(watcherIdent, replacementLiteral, watcherIdent.parent, watcherIdent.container, watcherIdent.key, stats)
-
-                                    replacedConstants = true
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    return replacedConstants
-end
-
-local function optimizeAssignmentsAndDeclarations(funcInfos, identInfos, declIdentWatchers, declIdentReadCount, declIdentAssignmentCount, stats)
-    local function optimizeAssignmentOrDeclLike(statement, funcInfo)
-        local isDecl       = (statement.type == "declaration")
-        local isFunc       = (statement.type == "function")
-        local isForLoop    = (statement.type == "for")
-        local isAssignment = (statement.type == "assignment")
-
-        if isDecl or isAssignment then
-            local lvalues = statement.targets or statement.names
-            local values  = statement.values
-
-            local madeToAdjusted = {}
-
-            for slot = 1, #values-1 do
-                local valueExpr = values[slot]
-
-                if isNodeValueList(valueExpr) then
-                    valueExpr.adjustToOne     = true
-                    madeToAdjusted[valueExpr] = true
-                end
-            end
-
-            for slot = #values, #lvalues+1, -1 do
-                local valueExpr = values[slot]
-
-                if not mayNodeBeInvolvedInJump(valueExpr) then
-                    unregisterWatchersBeforeNodeRemoval(identInfos, declIdentWatchers, valueExpr, declIdentReadCount, declIdentAssignmentCount, funcInfos, funcInfo, stats, true)
-                    tableRemove(values, slot)
-                end
-            end
-
-            for slot = #lvalues+1, #values do
-                values[slot].key = slot
-            end
-
-            local wantToRemoveLvalue        = {}
-            local wantToRemoveValueIfExists = {}
-            local mayRemoveValueIfExists    = {}
-
-            for slot, lvalue in ipairsr(lvalues) do
-                local declIdent = (lvalue.type == "identifier") and lvalue.declaration or nil
-
-                if declIdent and declIdentReadCount[declIdent] == 0 then
-                    local valueExpr          = values[slot]
-                    local valueExprEffective = valueExpr
-
-                    if not valueExprEffective then
-                        valueExprEffective = values[#values]
-                        if valueExprEffective and not isNodeValueList(valueExprEffective) then  valueExprEffective = nil  end
-                    end
-
-                    wantToRemoveLvalue       [slot] = isAssignment or declIdentAssignmentCount[declIdent] == 0
-                    wantToRemoveValueIfExists[slot] = not (valueExpr and mayNodeBeInvolvedInJump(valueExpr))
-                    mayRemoveValueIfExists   [slot] = wantToRemoveValueIfExists[slot] and not (not valueExpr and lvalues[slot+1] and valueExprEffective)
-
-                    local canRemoveSlot = (wantToRemoveLvalue[slot] and mayRemoveValueIfExists[slot])
-
-                    if canRemoveSlot and #lvalues > 1 then
-                        unregisterWatchersBeforeNodeRemoval(identInfos, declIdentWatchers, lvalue, declIdentReadCount, declIdentAssignmentCount, funcInfos, funcInfo, stats, true)
-                        tableRemove(lvalues, slot)
-                        for slot = slot, #lvalues do
-                            lvalues[slot].key = slot
-                        end
-                        wantToRemoveLvalue[slot] = wantToRemoveLvalue[slot+1]
-                    end
-
-                    if wantToRemoveValueIfExists[slot] and valueExpr then
-                        if (canRemoveSlot or not values[slot+1]) and not (isAssignment and not values[2]) then
-                            unregisterWatchersBeforeNodeRemoval(identInfos, declIdentWatchers, valueExpr, declIdentReadCount, declIdentAssignmentCount, funcInfos, funcInfo, stats, true)
-                            tableRemove(values, slot)
-                            for slot = slot, #values do
-                                values[slot].key = slot
-                            end
-                            wantToRemoveValueIfExists[slot] = wantToRemoveValueIfExists[slot+1]
-                            mayRemoveValueIfExists   [slot] = mayRemoveValueIfExists   [slot+1]
-
-                        elseif not (valueExpr.type == "literal" and valueExpr.value == nil) then
-                            unregisterWatchersBeforeNodeRemoval(identInfos, declIdentWatchers, valueExpr, declIdentReadCount, declIdentAssignmentCount, funcInfos, funcInfo, stats, false)
-                            replace(valueExpr, AstLiteral(valueExpr.token, nil), valueExpr.parent, valueExpr.container, valueExpr.key, stats)
-                        end
-                    end
-                end
-            end
-
-            local statementIsRemoved = false
-
-            do
-                if
-                    wantToRemoveLvalue[1]
-                    and (
-                        mayRemoveValueIfExists[1]
-                        or not (isAssignment or values[1])
-                    )
-                    and not (lvalues[2] or values[2])
-                then
-                    unregisterWatchersBeforeNodeRemoval(identInfos, declIdentWatchers, statement, declIdentReadCount, declIdentAssignmentCount, funcInfos, funcInfo, stats, true)
-
-                    local block = statement.parent
-
-                    for i = statement.key, #block.statements do
-                        local statement     = block.statements[i+1]
-                        block.statements[i] = statement
-
-                        if statement then  statement.key = i  end
-                    end
-
-                    statementIsRemoved = true
-
-                elseif areAllLvaluesUnwantedAndAllValuesCalls(lvalues, values, wantToRemoveLvalue) then
-                    for _, lvalue in ipairs(lvalues) do
-                        unregisterWatchersBeforeNodeRemoval(identInfos, declIdentWatchers, lvalue, declIdentReadCount, declIdentAssignmentCount, funcInfos, funcInfo, stats, true)
-                    end
-
-                    tableRemove(statement.container, statement.key)
-
-                    for slot, call in ipairs(values) do
-                        local i = statement.key + slot - 1
-                        tableInsert(statement.container, i, call)
-
-                        call.parent    = statement.parent
-                        call.container = statement.container
-                        call.key       = i
-                    end
-
-                    statementIsRemoved = true
-                end
-            end
-
-            for i = 1, #values do
-                local valueExpr = values[i]
-                if (valueExpr.type == "call" or valueExpr.type == "vararg") then
-                    if statementIsRemoved or values[i+1] or not lvalues[i+1] or not madeToAdjusted[valueExpr] then
-                        valueExpr.adjustToOne = false
-                    end
-                end
-            end
-
-        elseif isFunc or isForLoop then
-            local declIdents = getNameArrayOfDeclLike(statement)
-
-            for slot = #declIdents, (isForLoop and 2 or 1), -1 do
-                local declIdent = declIdents[slot]
-                if declIdentReadCount[declIdent] == 0 and declIdentAssignmentCount[declIdent] == 0 then
-                    unregisterWatchersBeforeNodeRemoval(identInfos, declIdentWatchers, declIdent, declIdentReadCount, declIdentAssignmentCount, funcInfos, funcInfo, stats, true)
-                    tableRemove(declIdents)
-                else
-                    break
-                end
-            end
-
-            for slot, declIdent in ipairs(declIdents) do
-                declIdent.key = slot
-            end
-
-        else
-            error(statement.type)
-        end
-    end
-
-    for _, funcInfo in ipairsr(funcInfos) do
-        for _, assignment in ipairsr(funcInfo.assignments) do
-            optimizeAssignmentOrDeclLike(assignment, funcInfo)
-        end
-    end
-    for _, funcInfo in ipairsr(funcInfos) do
-        for _, declLike in ipairsr(funcInfo.declLikes) do
-            optimizeAssignmentOrDeclLike(declLike, funcInfo)
-        end
-    end
-end
-
+-- Note: References need to be updated after calling this!
 local function _optimize(theNode, stats)
-    _simplify(theNode, stats)
+	_simplify(theNode, stats)
 
-    local identInfos, declIdentWatchers                = getInformationAboutIdentifiersAndUpdateReferences(theNode)
-    local funcInfos                                    = getInformationAboutFunctions(theNode)
-    local declIdentReadCount, declIdentAssignmentCount = getAccessesOfDeclaredNames(funcInfos, identInfos, declIdentWatchers)
+	local identInfos, declIdentWatchers                = getInformationAboutIdentifiersAndUpdateReferences(theNode)
+	local funcInfos                                    = getInformationAboutFunctions(theNode)
+	local declIdentReadCount, declIdentAssignmentCount = getAccessesOfDeclaredNames(funcInfos, identInfos, declIdentWatchers)
 
-    local replacedConstants = optimizeReplaceConstants(funcInfos, identInfos, declIdentWatchers, declIdentReadCount, declIdentAssignmentCount, stats)
+	--
+	-- Replace variables that are effectively constants with literals.
+	--
+	local replacedConstants = false
 
-    if replacedConstants then
-        return _optimize(theNode, stats)
-    end
+	for _, funcInfo in ipairs(funcInfos) do
+		for _, declLike in ipairs(funcInfo.declLikes) do
+			if declLike.type == "declaration" then
+				local decl = declLike
 
-    optimizeAssignmentsAndDeclarations(funcInfos, identInfos, declIdentWatchers, declIdentReadCount, declIdentAssignmentCount, stats)
+				for slot = 1, #decl.names do
+					local declIdent = decl.names[slot]
+					local valueExpr = decl.values[slot]
 
-    _simplify(theNode, stats)
+					if
+						declIdentAssignmentCount[declIdent] == 0
+						and declIdentReadCount[declIdent] > 0
+						and (
+							(not valueExpr and not (decl.values[1] and isNodeValueList(decl.values[#decl.values])))
+							or (
+								valueExpr
+								and valueExpr.type == "literal"
+								and not (
+									(type(valueExpr.value) == "string" and #valueExpr.value > parser.constantNameReplacementStringMaxLength)
+									-- or (valueExpr.value == 0 and not NORMALIZE_MINUS_ZERO and tostring(valueExpr.value) == "-0") -- No, bad rule!
+								)
+							)
+						)
+					then
+						-- where(declIdent, "Constant declaration.") -- DEBUG
+
+						local valueLiteral = valueExpr
+						local valueIsZero  = (valueLiteral ~= nil and valueLiteral.value == 0)
+
+						for _, watcherIdent in ipairsr(declIdentWatchers[declIdent]) do
+							if watcherIdent.declaration == declIdent then -- Note: declIdent is never a vararg here (because we only process declarations).
+								local identInfo = identInfos[watcherIdent]
+
+								if
+									identInfo.type == "rvalue"
+									-- Avoid creating '-0' (or '- -0') here as that may mess up Lua in weird/surprising ways.
+									and not (valueIsZero and not NORMALIZE_MINUS_ZERO and watcherIdent.parent.type == "unary" and watcherIdent.parent.operator == "-")
+								then
+									-- where(watcherIdent, "Constant value replacement.") -- DEBUG
+
+									local v                  = valueLiteral and valueLiteral.value
+									local replacementLiteral = AstLiteral(watcherIdent.token, v)
+
+									unregisterWatchersBeforeNodeRemoval(identInfos, declIdentWatchers, watcherIdent, declIdentReadCount, declIdentAssignmentCount, funcInfos, funcInfo, stats, false)
+									replace(watcherIdent, replacementLiteral, watcherIdent.parent, watcherIdent.container, watcherIdent.key, stats)
+
+									replacedConstants = true
+								end
+							end
+						end--for declIdentWatchers
+					end
+				end--for declIdents
+			end
+		end--for declLikes
+	end--for funcInfos
+
+	if replacedConstants then
+		return _optimize(theNode, stats) -- @Speed
+	end
+
+	--
+	-- Remove useless assignments and declaration-likes (in that order).
+	--
+	-- Note that we go in reverse order almost everywhere! We may remove later stuff when we reach earlier stuff.
+	--
+	local function optimizeAssignmentOrDeclLike(statement, funcInfo)
+		local isDecl       = (statement.type == "declaration")
+		local isFunc       = (statement.type == "function")
+		local isForLoop    = (statement.type == "for")
+		local isAssignment = (statement.type == "assignment")
+
+		if isDecl or isAssignment then
+			local lvalues = statement.targets or statement.names
+			local values  = statement.values
+
+			-- Save some adjustment information.
+			local madeToAdjusted = {}
+
+			for slot = 1, #values-1 do -- Skip the last value.
+				local valueExpr = values[slot]
+
+				if isNodeValueList(valueExpr) then
+					valueExpr.adjustToOne     = true
+					madeToAdjusted[valueExpr] = true
+				end
+			end
+
+			-- Remove useless extra values.
+			for slot = #values, #lvalues+1, -1 do
+				local valueExpr = values[slot]
+
+				if not mayNodeBeInvolvedInJump(valueExpr) then
+					unregisterWatchersBeforeNodeRemoval(identInfos, declIdentWatchers, valueExpr, declIdentReadCount, declIdentAssignmentCount, funcInfos, funcInfo, stats, true)
+					tableRemove(values, slot)
+				end
+			end
+
+			for slot = #lvalues+1, #values do
+				values[slot].key = slot
+			end
+
+			-- Remove useless lvalues.
+			local wantToRemoveLvalue        = {}
+			local wantToRemoveValueIfExists = {}
+			local mayRemoveValueIfExists    = {}
+
+			for slot, lvalue in ipairsr(lvalues) do
+				local declIdent = (lvalue.type == "identifier") and lvalue.declaration or nil
+
+				if declIdent and declIdentReadCount[declIdent] == 0 then
+					-- ioWrite("useless ") ; printNode(lvalue) -- DEBUG
+
+					local valueExpr          = values[slot]
+					local valueExprEffective = valueExpr
+
+					if not valueExprEffective then
+						valueExprEffective = values[#values]
+						if valueExprEffective and not isNodeValueList(valueExprEffective) then  valueExprEffective = nil  end
+					end
+
+					wantToRemoveLvalue       [slot] = isAssignment or declIdentAssignmentCount[declIdent] == 0
+					wantToRemoveValueIfExists[slot] = not (valueExpr and mayNodeBeInvolvedInJump(valueExpr))
+					mayRemoveValueIfExists   [slot] = wantToRemoveValueIfExists[slot] and not (not valueExpr and lvalues[slot+1] and valueExprEffective)
+
+					-- @Incomplete: Update funcInfo.locals and whatever else (if we end up using them at some point).
+					-- @Incomplete: Replace 'unused,useless=func()' with 'useless=func()'.
+					local canRemoveSlot = (wantToRemoveLvalue[slot] and mayRemoveValueIfExists[slot])
+
+					-- Maybe remove lvalue.
+					if canRemoveSlot and #lvalues > 1 then
+						unregisterWatchersBeforeNodeRemoval(identInfos, declIdentWatchers, lvalue, declIdentReadCount, declIdentAssignmentCount, funcInfos, funcInfo, stats, true)
+						tableRemove(lvalues, slot)
+						for slot = slot, #lvalues do
+							lvalues[slot].key = slot
+						end
+						wantToRemoveLvalue[slot] = wantToRemoveLvalue[slot+1] -- May become nil. We no longer care about the value of slot+1 and beyond after this point.
+					end
+
+					-- Maybe remove value.
+					if wantToRemoveValueIfExists[slot] and valueExpr then
+						if (canRemoveSlot or not values[slot+1]) and not (isAssignment and not values[2]) then
+							unregisterWatchersBeforeNodeRemoval(identInfos, declIdentWatchers, valueExpr, declIdentReadCount, declIdentAssignmentCount, funcInfos, funcInfo, stats, true)
+							tableRemove(values, slot)
+							for slot = slot, #values do
+								values[slot].key = slot
+							end
+							wantToRemoveValueIfExists[slot] = wantToRemoveValueIfExists[slot+1] -- May become nil. We no longer care about the value of slot+1 and beyond after this point.
+							mayRemoveValueIfExists   [slot] = mayRemoveValueIfExists   [slot+1] -- May become nil. We no longer care about the value of slot+1 and beyond after this point.
+
+						elseif not (valueExpr.type == "literal" and valueExpr.value == nil) then
+							unregisterWatchersBeforeNodeRemoval(identInfos, declIdentWatchers, valueExpr, declIdentReadCount, declIdentAssignmentCount, funcInfos, funcInfo, stats, false)
+							replace(valueExpr, AstLiteral(valueExpr.token, nil), valueExpr.parent, valueExpr.container, valueExpr.key, stats)
+						end
+					end
+				end--if lvalue is relevant
+			end--for lvalues
+
+			-- Maybe remove or replace the whole statement.
+			local statementIsRemoved = false
+
+			do
+				-- Remove the whole statement.
+				if
+					wantToRemoveLvalue[1]
+					and (
+						mayRemoveValueIfExists[1]
+						or not (isAssignment or values[1]) -- Declaration-likes may have no value - assignments must have at least one.
+					)
+					and not (lvalues[2] or values[2])
+				then
+					unregisterWatchersBeforeNodeRemoval(identInfos, declIdentWatchers, statement, declIdentReadCount, declIdentAssignmentCount, funcInfos, funcInfo, stats, true)
+
+					local block = statement.parent
+
+					for i = statement.key, #block.statements do
+						local statement     = block.statements[i+1] -- This be nil for the last 'i'.
+						block.statements[i] = statement
+
+						if statement then  statement.key = i  end
+					end
+
+					statementIsRemoved = true
+
+				-- Replace 'unused=func()' with just 'func()'. This is a unique case as call expressions can also be statements.
+				elseif areAllLvaluesUnwantedAndAllValuesCalls(lvalues, values, wantToRemoveLvalue) then
+					for _, lvalue in ipairs(lvalues) do
+						unregisterWatchersBeforeNodeRemoval(identInfos, declIdentWatchers, lvalue, declIdentReadCount, declIdentAssignmentCount, funcInfos, funcInfo, stats, true)
+					end
+
+					tableRemove(statement.container, statement.key) -- The parent ought to be a block!
+
+					for slot, call in ipairs(values) do
+						local i = statement.key + slot - 1
+						tableInsert(statement.container, i, call)
+
+						call.parent    = statement.parent
+						call.container = statement.container
+						call.key       = i
+					end
+
+					statementIsRemoved = true
+				end
+			end
+
+			-- Restore or remove adjusted flags.
+			-- @Speed: Don't do anything if statementIsRemoved is set (and we don't need to for some other reason).
+			for i = 1, #values do
+				local valueExpr = values[i]
+				if (valueExpr.type == "call" or valueExpr.type == "vararg") then
+					if statementIsRemoved or values[i+1] or not lvalues[i+1] or not madeToAdjusted[valueExpr] then
+						valueExpr.adjustToOne = false
+					end
+				end
+			end
+
+		elseif isFunc or isForLoop then
+			local declIdents = getNameArrayOfDeclLike(statement)
+
+			for slot = #declIdents, (isForLoop and 2 or 1), -1 do
+				local declIdent = declIdents[slot]
+				if declIdentReadCount[declIdent] == 0 and declIdentAssignmentCount[declIdent] == 0 then
+					unregisterWatchersBeforeNodeRemoval(identInfos, declIdentWatchers, declIdent, declIdentReadCount, declIdentAssignmentCount, funcInfos, funcInfo, stats, true)
+					tableRemove(declIdents)
+				else
+					break
+				end
+			end
+
+			for slot, declIdent in ipairs(declIdents) do
+				declIdent.key = slot
+			end
+
+		else
+			error(statement.type)
+		end
+	end
+
+	for _, funcInfo in ipairsr(funcInfos) do
+		for _, assignment in ipairsr(funcInfo.assignments) do
+			optimizeAssignmentOrDeclLike(assignment, funcInfo)
+		end
+	end
+	for _, funcInfo in ipairsr(funcInfos) do
+		for _, declLike in ipairsr(funcInfo.declLikes) do
+			optimizeAssignmentOrDeclLike(declLike, funcInfo)
+		end
+	end
+
+	-- @Incomplete: Remove useless return statements etc.
+
+	_simplify(theNode, stats) -- Not sure if needed. Or maybe we need to iterate?
 end
-
 
 -- Note: References need to be updated after calling this!
 local function optimize(theNode)
