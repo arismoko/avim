@@ -1,6 +1,6 @@
 local KeyHandler = require("KeyHandler"):getInstance()
 local CommandHandler = require("CommandHandler"):getInstance()
-local avim = require("Avim"):getInstance()
+local bufferHandler = require("BufferHandler"):getInstance()
 
 -- === Normal and Visual Mode Keybindings ===
 
@@ -175,19 +175,19 @@ end, "Exit Editor")
 
 -- Search and Replace
 KeyHandler:map("n", "/", function()
-    avim:switchMode("command", "search ")   
+    bufferHandler:switchMode("command", "search ")   
 end, "Search")
 
 KeyHandler:map("n", "?", function()
-    avim:switchMode("command", "replace ")   
+    bufferHandler:switchMode("command", "replace ")   
 end, "Replace")
 
 KeyHandler:map("n", "ctrl + /", function()
-    avim:switchMode("command", "replace_all ")
+    bufferHandler:switchMode("command", "replace_all ")
 end, "Replace All")
 
 KeyHandler:map("n", "ctrl + n", function()
-    avim:switchMode("command", nil, true)
+    bufferHandler:switchMode("command", nil, true)
 end, "Execute previous command")
 
 -- === Visual Mode Specific Keybindings ===

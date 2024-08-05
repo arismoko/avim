@@ -1,54 +1,89 @@
 local function init(components)
-    local Avim = components.Avim
+    local bufferHandler = components.bufferHandler
     local KeyHandler = components.KeyHandler
-    local View = require("View")
+    local viewInstance = components.View
 
-    -- Instantiate the view instance for displaying popups
-    local viewInstance = View:getInstance()
+   
+    local errorFile = "tmp/luafmt_errors.txt"
+
+    -- Function to check if the error file exists and return its content
+    local function getErrorContent()
+        if fs.exists(errorFile) then
+            local file = io.open(errorFile, "r")
+            local content = file:read("*all")
+            file:close()
+            if content and #content > 0 then
+                return content
+            end
+        end
+        return nil
+    end
 
     local function formatBuffer()
-        local model = Avim:getInstance()
-        local buffer = model.buffer
-
-        -- Save the current buffer to a temporary file
-        local tempFile = "/tmp/temp_lua_buffer.lua"
-        local file = fs.open(tempFile, "w")
-        file.write(buffer)
-        file.close()
+        bufferHandler:saveFile()
+        local file = bufferHandler.filename
+        -- Copy the file to tmp/ to avoid overwriting the original file
+        local tempFile = "tmp/" .. fs.getName(file)
+        
+        -- Remove any previous error file
+        if fs.exists(errorFile) then
+            fs.delete(errorFile)
+        end
+        
+        -- Copy the file to the temporary location
+        if fs.exists(tempFile) then
+            fs.delete(tempFile)
+        end
+        fs.copy(file, tempFile)
+        if not fs.exists(tempFile) then
+            bufferHandler:updateStatusBar("Error: Failed to copy buffer to temporary location")
+            return
+        end
 
         -- Construct the command to run the formatter
         local formatterScript = "plugins/aLSP/luafmt.lua"
-        local command = "lua " .. formatterScript .. " --f " .. tempFile .. " 80"
+        local command = " --f " .. tempFile .. " 40"
 
-        -- Run the formatter script
-        local status, errorMessage = pcall(function()
-           shell.run(command) 
+        -- Use xpcall to run the formatter script and handle errors
+        local status, result = pcall(function()
+            return shell.run(formatterScript, command)
         end)
 
-        if status then
-            -- Read the formatted buffer back from the temporary file
-            local formattedFile = fs.open(tempFile, "r")
-            local formattedBuffer = formattedFile.readAll()
-            formattedFile.close()
-
-            -- Replace the current buffer with the formatted Lua buffer
-            model.buffer = formattedBuffer
-
-            -- Mark all lines as dirty to redraw them
-            for i = 1, #model.buffer do
-                model:markDirty(i)
-            end
-
-            -- Update the status bar to indicate success
-            model:updateStatusBar("Buffer formatted successfully!")
-        else
-            -- Handle the error if the formatting fails
-            local errorMessage = "Error: Failed to format buffer. " .. (errorMessage or "Unknown error")
-            print(errorMessage)
-            viewInstance:showPopup("Error!")
+        if not status then
+            viewInstance:showPopup("An error occurred while running the formatter: " .. result)
+            return
         end
 
-        -- Clean up the temporary file
+        -- Check if the error file has any content
+        local errorContent = getErrorContent()
+        if errorContent then
+            viewInstance:showPopup("Formatting failed:\n" .. errorContent)
+            return
+        end
+
+        if type(result) == "table" then
+            -- If result is a table, it's an error list
+            for _, error in ipairs(result) do
+                viewInstance:showPopup(error)
+            end
+        elseif result == true then
+            -- If result is true, formatting was successful
+            -- Copy the formatted file back to the original location and back up the original file
+            if fs.exists(file .. ".bak") then
+                fs.delete(file .. ".bak")
+            end
+            fs.copy(file, file .. ".bak")
+            fs.delete(file)
+            fs.copy(tempFile, file)
+            bufferHandler:loadFile(file)
+            -- Update the status bar to indicate success
+            bufferHandler:updateStatusBar("Buffer formatted successfully!")
+        else
+            -- Handle any other unexpected cases
+            viewInstance:showPopup("Unexpected result from formatter.")
+        end
+
+        -- Clean up the temporary file regardless of success or failure
         fs.delete(tempFile)
     end
 

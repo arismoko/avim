@@ -4,25 +4,46 @@ local function printHelp()
 	print("\t\tto print formatted version to standard out")
 	print("usage:\n\tlua " .. arg[0] .. " --f <lua file> [column hint]")
 	print("\t\tto reformat the file in-place")
-	os.exit(1)
 end
 
-setmetatable(_G, {
-	__index = function(_, k)
-		error("cannot read nil global variable `" .. k .. "`", 2)
-	end,
-})
+--check tmp/luafmt_errors.txt and delete if exists
+local errorFile = "tmp/luafmt_errors.txt"
+if fs.exists(errorFile) then
+	fs.delete(errorFile)
+end
 
+--function to save error to errorFile with a 40-column limit
+	local function saveError(error)
+		local file = io.open(errorFile, "a")
+		
+		-- Function to split the error message into chunks of 40 characters
+		local function splitError(error, limit)
+			local lines = {}
+			for i = 1, #error, limit do
+				table.insert(lines, error:sub(i, i + limit - 1))
+			end
+			return lines
+		end
+	
+		local lines = splitError(error, 30)
+		for _, line in ipairs(lines) do
+			file:write(line .. "\n")
+		end
+		
+		file:write("\n") -- Add an additional newline after the error message
+		file:close()
+	end
+	
 --------------------------------------------------------------------------------
 
-local COLUMN_LIMIT = 80
+local COLUMN_LIMIT = 40
 local TAB_COLUMNS = 4
 
 --------------------------------------------------------------------------------
 
 -- RETURNS a string representing a literal 'equivalent' to the object
 -- (excluding references and non-serializable objects like functions)
-local show;
+local show
 do
 	local specialRepresentation = {
 		["\a"] = [[\a]],
@@ -86,7 +107,10 @@ end
 --------------------------------------------------------------------------------
 
 local function matcher(pattern, tag)
-	assert(type(tag) == "string")
+	if type(tag) ~= "string" then
+		saveError("Tag must be a string")
+		assert(false, "Tag must be a string")
+	end
 	return function(text, offset)
 		local from, to = text:find("^" .. pattern, offset)
 		if from then
@@ -130,6 +154,8 @@ local TOKENS = {
 					return i, "string"
 				end
 			end
+			saveError("Unclosed string literal starting at offset " .. offset)
+			error("Unclosed string literal starting at offset " .. offset, 2)
 		end
 	end,
 
@@ -142,7 +168,10 @@ local TOKENS = {
 				"%]" .. string.rep("=", size) .. "%]",
 				offset
 			)
-			assert(stop)
+			if not stop then
+				saveError("Unclosed long string literal starting at offset " .. offset)
+				error("Unclosed long string literal starting at offset " .. offset, 2)
+			end
 			return stop, "string"
 		end
 	end,
@@ -157,7 +186,10 @@ local TOKENS = {
 					"%]" .. string.rep("=", size) .. "%]",
 					offset
 				)
-				assert(stop)
+				if not stop then
+					saveError("Unclosed long comment starting at offset " .. offset)
+					error("Unclosed long comment starting at offset " .. offset, 2)
+				end
 				return stop, "comment"
 			end
 			return (text:find("\n", offset) or #text + 1) - 1, "comment"
@@ -261,34 +293,66 @@ local TOKENS = {
 
 -- RETURNS a list of tokens
 local function tokenize(blob)
-	assert(type(blob) == "string")
+    if type(blob) ~= "string" then
+        saveError("Input must be a string")
+        assert(false, "Input must be a string")
+    end
 
-	local tokens = {}
-	local offset = 1
-	while offset < #blob do
-		local didCut = false
-		for _, t in ipairs(TOKENS) do
-			local cut, tag = t(blob, offset)
-			if cut then
-				assert(type(cut) == "number", _ .. " number")
-				assert(cut >= offset, _ .. " offset")
-				assert(tag, tostring(_) .. " tag")
-				if tag ~= "whitespace" then
-					table.insert(tokens, {
-						tag = tag,
-						text = blob:sub(offset, cut),
-						offset = offset,
-					})
-				end
-				offset = cut + 1
-				didCut = true
-				break
-			end
-		end
-		assert(didCut, blob:sub(offset, offset + 50))
-	end
-	return tokens
+    local tokens = {}
+    local offset = 1
+    while offset <= #blob do
+        local didCut = false
+        for _, t in ipairs(TOKENS) do
+            local cut, tag = t(blob, offset)
+            if cut then
+                if type(cut) ~= "number" then
+                    saveError("Tokenizer function returned invalid cut position: " .. tostring(cut))
+                    assert(false, "Tokenizer function returned invalid cut position: " .. tostring(cut))
+                end
+                if cut < offset then
+                    saveError("Tokenizer cut position is before the current offset")
+                    assert(false, "Tokenizer cut position is before the current offset")
+                end
+                if not tag then
+                    saveError("Tokenizer did not return a valid tag for the token")
+                    assert(false, "Tokenizer did not return a valid tag for the token")
+                end
+
+                if tag ~= "whitespace" then
+                    table.insert(tokens, {
+                        tag = tag,
+                        text = blob:sub(offset, cut),
+                        offset = offset,
+                    })
+                end
+
+                offset = cut + 1
+                didCut = true
+                break
+            end
+        end
+
+        if not didCut then
+            -- Identify the location of the error
+            local lineNumber = select(2, blob:sub(1, offset):gsub("\n", "\n"))
+            local lineStart = blob:sub(1, offset):match("([^\n]*)$")
+            local lineEnd = blob:sub(offset):match("^([^\n]*)")
+
+            -- Create a detailed error message
+            local errorMessage = string.format(
+                "Syntax Error at line %d, offset %d: Could not tokenize near '%s'.\nContext: %s%s",
+                lineNumber, offset, blob:sub(offset, offset + 10), lineStart, lineEnd
+            )
+
+            -- Save and raise the error
+            saveError(errorMessage)
+            error(errorMessage, 2)
+        end
+    end
+
+    return tokens
 end
+
 
 local function catchGap(obj)
 	local out = {}
@@ -298,7 +362,8 @@ local function catchGap(obj)
 	return setmetatable(out, {
 		__index = function(_, key)
 			if obj[key] == nil then
-				error("no such key `" .. tostring(key) .. "`", 2)
+				saveError("No such key `" .. tostring(key) .. "`")
+				error("No such key `" .. tostring(key) .. "`", 2)
 			end
 			return obj[key]
 		end,
@@ -441,32 +506,47 @@ local function groupTokens(tokens)
 	local context = {tag = "code", children = {}}
 	local stack = {}
 	for _, token in ipairs(tokens) do
-		assert(token.text)
+		if not token.text then
+			saveError("Token text is missing")
+			assert(false, "Token text is missing")
+		end
 		token.headText = token.text
 		token.tailText = token.text
 		token.tailTag = token.tag
 		token.headTag = token.tag
-		assert(token.headText)
+		if not token.headText then
+			saveError("Token headText is missing")
+			assert(false, "Token headText is missing")
+		end
 		if OPENS[token.tag] then
 			table.insert(stack, context)
 			local newContext = {tag = OPENS[token.tag], children = {token}}
 			table.insert(context.children, newContext)
 			context = newContext
 		elseif CLOSES[token.tag] then
-			assert(context.tag == CLOSES[token.tag])
+			if context.tag ~= CLOSES[token.tag] then
+				saveError("Mismatched closing token: " .. tostring(token.text))
+				assert(false, "Mismatched closing token: " .. tostring(token.text))
+			end
 			table.insert(context.children, token)
 			context.tailTag = context.children[#context.children].tailTag
 			context.tailText = context.children[#context.children].tailText
 			context.headTag = context.children[1].headTag
 			context.headText = context.children[1].headText
 			context = table.remove(stack)
-			assert(context)
+			if not context then
+				saveError("Unexpected end of stack")
+				assert(false, "Unexpected end of stack")
+			end
 		else
 			table.insert(context.children, token)
 		end
 	end
 
-	assert(#stack == 0)
+	if #stack ~= 0 then
+		saveError("Unclosed token groups remaining in stack")
+		assert(false, "Unclosed token groups remaining in stack")
+	end
 	return context
 end
 
@@ -538,7 +618,10 @@ local UNGLUE = {
 }
 
 local function matchLeft(m, t)
-	assert(type(m) == "string")
+	if type(m) ~= "string" then
+		saveError("Invalid match left string")
+		assert(false, "Invalid match left string")
+	end
 
 	if m == "*" then
 		return true
@@ -549,7 +632,10 @@ local function matchLeft(m, t)
 end
 
 local function matchRight(m, t)
-	assert(type(m) == "string")
+	if type(m) ~= "string" then
+		saveError("Invalid match right string")
+		assert(false, "Invalid match right string")
+	end
 
 	if m == "*" then
 		return true
@@ -565,8 +651,14 @@ end
 
 -- RETURNS (multiline) text
 local function renderTokens(tree, column, indent)
-	assert(type(column) == "number")
-	assert(type(indent) == "number")
+	if type(column) ~= "number" then
+		saveError("Column must be a number")
+		assert(false, "Column must be a number")
+	end
+	if type(indent) ~= "number" then
+		saveError("Indent must be a number")
+		assert(false, "Indent must be a number")
+	end
 
 	local INDENT_AFTER = {
 		["then"] = true,
@@ -644,8 +736,14 @@ local function renderTokens(tree, column, indent)
 	end
 
 	local function renderObject(tree, column, indent, sepBreak)
-		assert(type(sepBreak) == "boolean", "sepBreak must be boolean")
-		assert(type(indent) == "number", "indent must be number")
+		if type(sepBreak) ~= "boolean" then
+			saveError("sepBreak must be boolean")
+			assert(false, "sepBreak must be boolean")
+		end
+		if type(indent) ~= "number" then
+			saveError("indent must be number")
+			assert(false, "indent must be number")
+		end
 
 		local out = ""
 		for i, child in ipairs(tree.children) do
@@ -777,7 +875,10 @@ local function renderTokens(tree, column, indent)
 	elseif tree.tag == "blank" then
 		return ""
 	end
-	assert(type(tree.text) == "string")
+	if type(tree.text) ~= "string" then
+		saveError("Tree text is missing")
+		assert(false, "Tree text is missing")
+	end
 	return tree.text
 end
 
@@ -804,8 +905,8 @@ end
 -- Read input
 local file = io.open(filename, "rb")
 if not file then
-	print("cannot open file `" .. filename .. "`")
-	os.exit(1)
+	saveError("Cannot open file `" .. filename .. "`")
+	error("Cannot open file `" .. filename .. "`", 2)
 end
 
 local tokens = filterBlanks(tokenize(file:read("*all")))
@@ -819,8 +920,8 @@ if inplace then
 	-- Update the file
 	local out = io.open(filename, "wb")
 	if not out then
-		print("cannot open file `" .. filename .. "`")
-		os.exit(1)
+		saveError("Cannot open file `" .. filename .. "` for writing")
+		error("Cannot open file `" .. filename .. "` for writing", 2)
 	end
 
 	out:write(rendered)
@@ -830,3 +931,5 @@ else
 	-- Print to standard out
 	print(rendered)
 end
+
+return true

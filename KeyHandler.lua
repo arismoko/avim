@@ -265,8 +265,6 @@ function KeyHandler:handleKeyPress(key, isDown, model, view, commandHandler)
             -- Check if currentMap has a valid callback (indicating a complete keybinding)
             if currentMap.callback and not currentMap.keyUpEvent then
                 currentMap.callback()
-                model:markDirty(model.cursorY)
-                view:updateCursor()
                 self.currentKeySequence = {} -- Reset sequence
                 if self.leaderTimeoutTimer then
                     os.cancelTimer(self.leaderTimeoutTimer) -- Cancel any pending timer
@@ -297,8 +295,6 @@ function KeyHandler:handleKeyPress(key, isDown, model, view, commandHandler)
 
             if currentMap.callback and currentMap.keyUpEvent then
                 currentMap.callback()
-                model:markDirty(model.cursorY)
-                view:updateCursor()
                 self.currentKeySequence = {} -- Reset sequence
                 if self.leaderTimeoutTimer then
                     os.cancelTimer(self.leaderTimeoutTimer) -- Cancel any pending timer
@@ -314,11 +310,9 @@ function KeyHandler:handleInputEvent(mode, model, view, commandHandler)
     if model.InputMode == "keys" then
         self:handleKeyEvent(model, view, commandHandler)
         model:updateScroll()
-        view:drawScreen()
     elseif model.InputMode == "chars" then
         self:handleCharEvent(model, view)
         model:updateScroll()
-        view:drawScreen()
     end
 end
 
@@ -345,39 +339,15 @@ function KeyHandler:handleCharInput(char, model, view)
     if model.InputMode == "chars" then
         model:insertChar(char)
         model:markDirty(model.cursorY)
-
-        -- Update the view immediately after inserting the character
-        view:drawLine(model.cursorY - model.scrollOffset)
-
-        local prefix = model:getWordAtCursor()
-        local suggestions = model:getAutocompleteSuggestions(prefix)
-
-        if #suggestions > 0 then
-            if model.autocompleteWindow then
-                model.autocompleteWindow:close()
-            end
-            model.autocompleteWindow = view:showAutocompleteWindow(suggestions)
-            -- Ensure that the line where the character was inserted is redrawn
-            view:drawLine(model.cursorY - model.scrollOffset)
-        else
-            if model.autocompleteWindow then
-                model.autocompleteWindow:close()
-                model.autocompleteWindow = nil
-            end
-        end
     end
 end
 
 function KeyHandler:handleCharEvent(model, view)
-    local firstInput = true
-
     while true do
         local event, key = os.pullEvent()
 
         if event == "char" then
             self:handleCharInput(key, model, view)
-            view:refreshScreen()
-            model:updateScroll()
         elseif event == "key" then
             -- Refactor to check keyMap in "insert" mode
             local action = self.keyMap[model.mode][keys.getName(key)]
@@ -386,7 +356,6 @@ function KeyHandler:handleCharEvent(model, view)
                 break
             end
         end
-        ::continue::
     end
 end
 
@@ -408,6 +377,7 @@ function KeyHandler:getKeyDescriptions(mode)
     traverseMap(targetMap, "")
     return descriptions
 end
+
 function KeyHandler:resetKeySequence()
     self.currentKeySequence = {}
     self.currentModifierHeld = ""

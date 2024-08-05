@@ -1,13 +1,13 @@
 -- Model.lua
 
-Avim = {}
-Avim.__index = Avim
+BufferHandler = {}
+BufferHandler.__index = BufferHandler
 
 local instance
 local cachedView -- This will hold the cached View instance
 
 -- Singleton pattern for Model
-function Avim:new()
+function BufferHandler:new()
     if not instance then
         instance = {
             buffer = {},
@@ -32,13 +32,13 @@ function Avim:new()
             horizontalScrollOffset = 0,  -- Scroll offset for horizontal scrolling
             maxVisibleColumns = SCREENWIDTH, -- Width of the text area in characters
         }
-        setmetatable(instance, Avim)
+        setmetatable(instance, BufferHandler)
     end
     return instance
 end
-function Avim:getInstance()
+function BufferHandler:getInstance()
     if not instance then
-        instance = Avim:new()
+        instance = BufferHandler:new()
     end
     return instance
 end
@@ -51,21 +51,21 @@ local function getView()
     return cachedView
 end
 
-function Avim:updateStatusBar(message)
+function BufferHandler:updateStatusBar(message)
     local view = getView()
     self.statusMessage = message
     self.statusColor = colors.green -- Reset to default color
     view:drawStatusBar(SCREENWIDTH, SCREENHEIGHT)
 end
 
-function Avim:updateStatusError(message)
+function BufferHandler:updateStatusError(message)
     local view = getView()
     self.statusMessage = message
     self.statusColor = colors.red -- Set color to red for errors
     view:drawStatusBar(SCREENWIDTH, SCREENHEIGHT)
 end
 
-function Avim:clearStatusBar()
+function BufferHandler:clearStatusBar()
     local view = getView()
     self.statusMessage = ""
     self.statusColor = colors.green -- Reset to default color
@@ -73,7 +73,7 @@ function Avim:clearStatusBar()
 end
 
 -- Undo functionality with history and redo stack management
-function Avim:undo()
+function BufferHandler:undo()
     if #self.history > 0 then
         local lastState = table.remove(self.history)
         table.insert(self.redoStack, {
@@ -84,14 +84,24 @@ function Avim:undo()
         self.buffer = lastState.buffer
         self.cursorX = lastState.cursorX
         self.cursorY = lastState.cursorY
-        self:markDirty(self.cursorY) -- Mark current line as dirty after undo
+        self:refreshScreen()
         self:updateStatusBar("Undid last action")
     else
         self:updateStatusError("Nothing to undo")
     end
 end
 
-function Avim:redo()
+function BufferHandler:refreshScreen()
+    term.clear()
+    -- Mark all lines as dirty except the status bar
+    local adjustedHeight = SCREENHEIGHT - self.statusBarHeight
+    for i = 1, adjustedHeight do
+        self:markDirty(i)
+    end
+    term.setCursorBlink(true)
+end
+
+function BufferHandler:redo()
     if #self.redoStack > 0 then
         local redoState = table.remove(self.redoStack)
         table.insert(self.history, {
@@ -102,7 +112,7 @@ function Avim:redo()
         self.buffer = redoState.buffer
         self.cursorX = redoState.cursorX
         self.cursorY = redoState.cursorY
-        self:markDirty(self.cursorY) -- Mark current line as dirty after redo
+        self:refreshScreen()
         self:updateStatusBar("Redid last action")
     else
         self:updateStatusError("Nothing to redo")
@@ -110,7 +120,7 @@ function Avim:redo()
 end
 
 -- Visual mode handling
-function Avim:startVisualMode()
+function BufferHandler:startVisualMode()
     self.visualStartX = self.cursorX
     self.visualStartY = self.cursorY
     self.isVisualMode = true
@@ -118,7 +128,7 @@ function Avim:startVisualMode()
     self:switchMode("visual") -- Switch to visual mode
 end
 
-function Avim:endVisualMode()
+function BufferHandler:endVisualMode()
     self.visualStartX = nil
     self.visualStartY = nil
     self.isVisualMode = false
@@ -127,11 +137,11 @@ function Avim:endVisualMode()
     
     -- Redraw the screen to remove highlights
     local view = getView()
-    view:refreshScreen()
+    self:refreshScreen()
 end
 
 -- Loading and saving files
-function Avim:loadFile(name)
+function BufferHandler:loadFile(name)
     self.filename = name
     self.buffer = {}
     if fs.exists(self.filename) then
@@ -145,29 +155,25 @@ function Avim:loadFile(name)
         table.insert(self.buffer, "")
         self:updateStatusError("File not found, created new file: " .. self.filename)
     end
-    -- Mark all lines as dirty after loading a file
-    for i = 1, #self.buffer do
-        self:markDirty(i)
-    end
+    self:refreshScreen()
 end
-function Avim:close()
+function BufferHandler:close()
     self.shouldExit = true
     self:updateStatusBar("Closed editor")
 end
 
-function Avim:yankLine()
+function BufferHandler:yankLine()
     if #self.buffer == 0 then
         self:updateStatusError("Nothing to yank")
         return
     end
-
     self.yankRegister = self.buffer[self.cursorY] -- Copy current line to yank register
     self:updateStatusBar("Yanked line")
 end
 
 
 
-function Avim:saveFile()
+function BufferHandler:saveFile()
     local file = fs.open(self.filename, "w")
     for _, line in ipairs(self.buffer) do
         file.writeLine(line)
@@ -176,7 +182,7 @@ function Avim:saveFile()
     self:updateStatusBar("File saved: " .. self.filename)
 end
 
-function Avim:updateScroll()
+function BufferHandler:updateScroll()
     local adjustedHeight = SCREENHEIGHT - self.statusBarHeight
     local oldScrollOffset = self.scrollOffset
     local oldHorizontalScrollOffset = self.horizontalScrollOffset
@@ -204,8 +210,7 @@ function Avim:updateScroll()
         end
     end
     if self.scrollOffset ~= oldScrollOffset or self.horizontalScrollOffset ~= oldHorizontalScrollOffset then
-        local view = getView()
-        view:refreshScreen()
+        self:refreshScreen()
         return true -- Indicate that the scroll offset was updated
     end
 
@@ -217,7 +222,8 @@ end
 
 
 -- Function to mark all visible lines as dirty
-function Avim:markAllVisibleLinesDirty(adjustedHeight)
+function BufferHandler:markAllVisibleLinesDirty()
+    local adjustedHeight = SCREENHEIGHT - self.statusBarHeight
     for i = 1, adjustedHeight do
         self:markDirty(self.scrollOffset + i)
     end
@@ -225,24 +231,24 @@ end
 
 
 
-function Avim:setStatusBarHeight(height)
+function BufferHandler:setStatusBarHeight(height)
     self.statusBarHeight = height
 end
 
 -- Mark a line as dirty (needing to be redrawn)
-function Avim:markDirty(lineNumber)
+function BufferHandler:markDirty(lineNumber)
     if type(lineNumber) == "number" and lineNumber > 0 and lineNumber <= #self.buffer then
         self.dirtyLines[lineNumber] = true
     end
 end
 
 -- Clear all dirty lines after they've been redrawn
-function Avim:clearDirtyLines()
+function BufferHandler:clearDirtyLines()
     self.dirtyLines = {}
 end
 
 -- Editing operations
-function Avim:insertChar(char)
+function BufferHandler:insertChar(char)
     if #self.buffer == 0 then
         table.insert(self.buffer, "")
     end
@@ -250,17 +256,23 @@ function Avim:insertChar(char)
     local line = self.buffer[self.cursorY]
     self.buffer[self.cursorY] = line:sub(1, self.cursorX - 1) .. char .. line:sub(self.cursorX)
     self.cursorX = self.cursorX + 1
-    self:markDirty(self.cursorY) -- Mark line as dirty
+    self:markDirty(self.cursorY)
+    self:markDirty(self.cursorY + 1)
+    --if cursorX is greater than the maxVisibleColumns, update cursor and scroll
+    if self.cursorX > self.maxVisibleColumns then
+        self:updateScroll()
+    end
+    getView():drawScreen()
     self:updateStatusBar("Inserted character")
 end
 
-function Avim:backspace()
+function BufferHandler:backspace()
     if self.cursorX > 1 then
         self:saveToHistory()
         local line = self.buffer[self.cursorY]
         self.buffer[self.cursorY] = line:sub(1, self.cursorX - 2) .. line:sub(self.cursorX)
         self.cursorX = self.cursorX - 1
-        self:markDirty(self.cursorY) -- Mark line as dirty
+        self:refreshScreen()
         self:updateStatusBar("Deleted character")
     elseif self.cursorY > 1 then
         self:saveToHistory()
@@ -268,14 +280,15 @@ function Avim:backspace()
         self.cursorY = self.cursorY - 1
         self.cursorX = #self.buffer[self.cursorY] + 1
         self.buffer[self.cursorY] = self.buffer[self.cursorY] .. line
-        self:markDirty(self.cursorY) -- Mark line as dirty
+        self:refreshScreen()
         self:updateStatusBar("Deleted line")
     else
         self:updateStatusError("Nothing to delete")
     end
+        local view = getView()
 end
 
-function Avim:enter()
+function BufferHandler:enter()
     if #self.buffer == 0 then
         table.insert(self.buffer, "")
     end
@@ -286,12 +299,11 @@ function Avim:enter()
     table.insert(self.buffer, self.cursorY + 1, newLine)
     self.cursorY = self.cursorY + 1
     self.cursorX = 1
-    self:markDirty(self.cursorY) -- Mark current and previous lines as dirty
-    self:markDirty(self.cursorY - 1)
+    self:refreshScreen()
     self:updateStatusBar("Inserted new line")
 end
 
-function Avim:paste()
+function BufferHandler:paste()
     self:saveToHistory()
 
     local lines = {}
@@ -335,7 +347,7 @@ function Avim:paste()
 end
 
 -- Visual mode operations (yank and cut)
-function Avim:yankSelection()
+function BufferHandler:yankSelection()
     if not self.visualStartX or not self.visualStartY then
         self:updateStatusError("No selection to yank")
         return
@@ -363,7 +375,7 @@ function Avim:yankSelection()
     self:updateStatusBar("Yanked selection")
 end
 
-function Avim:cutSelection()
+function BufferHandler:cutSelection()
     if not self.visualStartX or not self.visualStartY then
         self:updateStatusError("No selection to cut")
         return
@@ -392,7 +404,7 @@ function Avim:cutSelection()
             self.buffer[y] = ""
         end
         self.yankRegister = self.yankRegister .. cutText .. "\n"
-        self:markDirty(y) -- Mark affected lines as dirty
+        self:refreshScreen()
     end
 
     self.cursorX = startX
@@ -406,9 +418,15 @@ function Avim:cutSelection()
     self:updateStatusBar("Cut selection")
 end
 
-function Avim:cutLine()
-    if #self.buffer == 0 then
-        self:updateStatusError("Nothing to cut")
+function BufferHandler:cutLine()
+    if #self.buffer == 1 then
+        self:saveToHistory()
+        self.yankRegister = self.buffer[1]
+        self.buffer = {""}
+        self.cursorX = 1
+        self.cursorY = 1
+        self:refreshScreen()
+        self:updateStatusBar("Cut line")
         return
     end
 
@@ -419,20 +437,14 @@ function Avim:cutLine()
         self.cursorY = #self.buffer
     end
     self.cursorX = 1
-    self:markDirty(self.cursorY) -- Mark current line as dirty
+    self:refreshScreen()
     self:updateStatusBar("Cut line")
 end
 
 -- Mode switching and history management
-function Avim:switchMode(mode, initialCommand, autoExecute)
+function BufferHandler:switchMode(mode, initialCommand, autoExecute)
     self:saveToHistory()
     self.mode = mode
-
-    -- Close the autocomplete window if switching out of 'insert' mode
-    if mode ~= "insert" and self.autocompleteWindow then
-        self.autocompleteWindow:close()
-        self.autocompleteWindow = nil
-    end
 
     -- Reset the InputMode based on the new mode
     if mode == "insert" then
@@ -454,12 +466,11 @@ function Avim:switchMode(mode, initialCommand, autoExecute)
         -- Pass initialCommand and autoExecute, even if initialCommand is nil
         commandHandler:handleCommandInput(self, view, initialCommand, autoExecute)
     end
-
-    view:refreshScreen()
+    self:refreshScreen()
 end
 
 -- Save the current state to history
-function Avim:saveToHistory()
+function BufferHandler:saveToHistory()
     table.insert(self.history, {
         buffer = table.deepCopy(self.buffer),
         cursorX = self.cursorX,
@@ -484,8 +495,7 @@ function table.deepCopy(orig)
     return copy
 end
 
--- Word detection for autocomplete functionality
-function Avim:getWordAtCursor()
+function BufferHandler:getWordAtCursor()
     local line = self.buffer[self.cursorY] or ""
     local startPos = self.cursorX
 
@@ -496,77 +506,11 @@ function Avim:getWordAtCursor()
     return line:sub(startPos, self.cursorX - 1)
 end
 
--- Hardcoded autocomplete keywords
-local autocompleteKeywords = {
-    "and", "break", "do", "else", "elseif", "end", "for", "function", "if", "in", 
-    "local", "nil", "not", "or", "repeat", "require", "return", "then", "until", 
-    "while", "View", "Model", "highlightLine", "createWindow"
-}
 
--- Helper function to get the value of a nested key
-local function getNestedValue(root, pathParts)
-    local current = root
-    for _, part in ipairs(pathParts) do
-        if type(current) == "table" and current[part] then
-            current = current[part]
-        else
-            return nil
-        end
-    end
-    return current
-end
 
--- Function to get autocomplete suggestions
-function Avim:getAutocompleteSuggestions(prefix)
-    local suggestions = {}
 
-    self:updateStatusBar("Suggestions for: " .. prefix)
 
-    local pathParts = {}
-    for part in prefix:gmatch("[^%.:]+") do
-        table.insert(pathParts, part)
-    end
-
-    if #pathParts > 1 then
-        local baseParts = {table.unpack(pathParts, 1, #pathParts - 1)}
-        local lastPart = pathParts[#pathParts]
-        local baseValue = getNestedValue(_G, baseParts)
-
-        if type(baseValue) == "table" then
-            for name, _ in pairs(baseValue) do
-                if name:sub(1, #lastPart) == lastPart then
-                    table.insert(suggestions, table.concat(baseParts, ".") .. "." .. name)
-                end
-            end
-        end
-    else
-        for _, keyword in ipairs(autocompleteKeywords) do
-            if keyword:sub(1, #prefix) == prefix then
-                table.insert(suggestions, keyword)
-            end
-        end
-
-        for name, value in pairs(_G) do
-            if type(name) == "string" and name:sub(1, #prefix) == prefix then
-                table.insert(suggestions, name)
-            end
-
-            if type(value) == "table" then
-                for key in pairs(value) do
-                    if type(key) == "string" and key:sub(1, #prefix) == prefix then
-                        table.insert(suggestions, name .. "." .. key)
-                    end
-                end
-            end
-        end
-    end
-
-    self:updateStatusBar("Suggestions for: " .. prefix .. " (" .. #suggestions .. " found)")
-
-    return suggestions
-end
-
-function Avim:insertTextAtCursor(text)
+function BufferHandler:insertTextAtCursor(text)
 
     local lines = {}
     for line in text:gmatch("([^\n]*)\n?") do
@@ -604,4 +548,4 @@ function Avim:insertTextAtCursor(text)
     self:saveToHistory()
 end
 
-return Avim
+return BufferHandler

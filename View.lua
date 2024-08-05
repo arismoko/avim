@@ -1,4 +1,4 @@
-local Model = require("Avim"):getInstance()
+local Model = require("BufferHandler"):getInstance()
 
 View = {}
 View.__index = View
@@ -147,6 +147,7 @@ function View:createWindow(x, y, width, height, backgroundColor, textColor)
         end
         term.setBackgroundColor(colors.black)
         term.setTextColor(colors.white)
+        View:drawScreen()
     end
     function window:scrollUp()
         if self.currentLine > 1 then
@@ -157,6 +158,7 @@ function View:createWindow(x, y, width, height, backgroundColor, textColor)
             end
             self.buffer[self.height] = string.rep(" ", self.width)  -- Clear the last line
             self:show()  -- Redraw the window content
+            View:drawScreen()
         end
     end
     function window:scrollDown()
@@ -168,6 +170,7 @@ function View:createWindow(x, y, width, height, backgroundColor, textColor)
             end
             self.buffer[1] = string.rep(" ", self.width)  -- Clear the first line
             self:show()  -- Redraw the window content
+            View:drawScreen()
         end
     end
         
@@ -175,14 +178,14 @@ function View:createWindow(x, y, width, height, backgroundColor, textColor)
         local view = View:getInstance()
 
         view.activeWindow = nil
-                term.clear()
-        view:refreshScreen()
+        Model:refreshScreen()
+        view:drawScreen()
     end
 
     function window:writeText(x, y, text)
         local bufferLine = self.buffer[y] or string.rep(" ", self.width)
         self.buffer[y] = bufferLine:sub(1, x - 1) .. text .. bufferLine:sub(x + #text)
-        self:show()
+        View:drawScreen()
     end
 
     function window:write(text)
@@ -196,12 +199,14 @@ function View:createWindow(x, y, width, height, backgroundColor, textColor)
             self.currentLine = self.currentLine + 1
             self.currentColumn = 1
         end
+        View:drawScreen()
     end
 
     function window:writeline(text)
         self:write(text)
         self.currentLine = self.currentLine + 1
         self.currentColumn = 1
+        View:drawScreen()
     end
 
     function window:clear()
@@ -210,7 +215,7 @@ function View:createWindow(x, y, width, height, backgroundColor, textColor)
         end
         self.currentLine = 1
         self.currentColumn = 1
-        self:show()
+        View:drawScreen()
     end
 
     function window:print(text)
@@ -230,6 +235,7 @@ function View:createWindow(x, y, width, height, backgroundColor, textColor)
 
     table.insert(View:getInstance().windows, window)
 
+    View:drawScreen()
     return window
 end
 
@@ -239,7 +245,7 @@ function View:closeAllWindows()
     end
     self.windows = {}
     self.activeWindow = nil
-    self:refreshScreen()
+    Model:refreshScreen()
 end
 
 function View:showPopup(message)
@@ -288,24 +294,51 @@ function View:showPopup(message)
     end
     popupWidth = math.min(maxPopupWidth, popupWidth)
 
-    local popupHeight = #lines + 2  -- 2 extra for the top and bottom borders
+    local popupHeight = SCREENHEIGHT - 4  -- Full screen height with some margin
     local popupX = math.floor((SCREENWIDTH - popupWidth) / 2)
-    local popupY = math.floor((SCREENHEIGHT - popupHeight) / 2)
+    local popupY = 1
 
     -- Create and display the popup window
     local window = self:createWindow(popupX, popupY, popupWidth, popupHeight, colorMatch.popupBG, colorMatch.popupFont)
-    window:clear()
-    window:writeline(string.rep("-", popupWidth))
 
-    for _, line in ipairs(lines) do
-        local paddingSpaces = math.floor((popupWidth - #line) / 2)
-        window:writeline("|" .. string.rep(" ", paddingSpaces) .. line .. string.rep(" ", popupWidth - #line - paddingSpaces - 2) .. "|")
+    local startIndex = 1
+    local itemsPerPage = popupHeight - 4  -- Adjust based on available window height
+
+    -- Function to display the popup content in the window
+    local function displayPopupContent(startIndex)
+        window:clear()
+        window:writeline(string.rep("-", popupWidth))
+
+        for i = startIndex, math.min(#lines, startIndex + itemsPerPage - 1) do
+            local line = lines[i]
+            local paddingSpaces = math.floor((popupWidth - #line) / 2)
+            window:writeline("|" .. string.rep(" ", paddingSpaces) .. line .. string.rep(" ", popupWidth - #line - paddingSpaces - 2) .. "|")
+        end
+
+        window:writeline(string.rep("-", popupWidth))
+        window:show()
     end
 
-    window:writeline(string.rep("-", popupWidth))
+    displayPopupContent(startIndex)
 
-    os.pullEvent("key")
-    window:close()
+    -- Listen for input to scroll and close the window
+    while true do
+        local event, key = os.pullEvent("key")
+        if key == keys.down or key == keys.j then
+            if startIndex + itemsPerPage - 1 < #lines then
+                startIndex = startIndex + 1
+                displayPopupContent(startIndex)
+            end
+        elseif key == keys.up or key == keys.k then
+            if startIndex > 1 then
+                startIndex = startIndex - 1
+                displayPopupContent(startIndex)
+            end
+        else
+            window:close()
+            break
+        end
+    end
 end
 
 
@@ -415,46 +448,10 @@ end
 
 function View:updateCursor()
     local lineNumberWidth = self:getLineNumberWidth() + 1
-    term.setCursorPos(Model.cursorX + lineNumberWidth, Model.cursorY - Model.scrollOffset)
+    local screenCursorX = Model.cursorX - Model.horizontalScrollOffset
+    term.setCursorPos(screenCursorX + lineNumberWidth, Model.cursorY - Model.scrollOffset)
 end
 
-function View:showAutocompleteWindow(suggestions)
-    local x = Model.cursorX
-    local y = Model.cursorY - Model.scrollOffset + 1
-
-    local width = math.max(10, #suggestions[1] + 2)
-    local height = math.min(#suggestions, 5)
-
-    if #suggestions > 5 then
-        suggestions = {table.unpack(suggestions, 1, 5)}
-    end
-
-    if Model.autocompleteWindow then
-        Model.autocompleteWindow:clear()
-    else
-        Model.autocompleteWindow = self:createWindow(x, y, width, height, colorMatch.popupBG, colorMatch.popupFont)
-        Model:updateStatusBar("Autocomplete suggestions window opened")
-    end
-
-    for i, suggestion in ipairs(suggestions) do
-        Model.autocompleteWindow:writeline(suggestion)
-    end
-
-    Model.suggestions = suggestions
-    Model.autocompleteWindow:show()
-
-    View:refreshScreen()
-    return Model.autocompleteWindow
-end
-function View:refreshScreen()
-    -- Mark all lines as dirty except the status bar
-    local adjustedHeight = SCREENHEIGHT - Model.statusBarHeight
-    for i = 1, adjustedHeight do
-        Model:markDirty(i)
-    end
-    View:drawScreen()
-    term.setCursorBlink(true)
-end
 
 function View:getAvailableWidth()
     local lineNumberWidth = self:getLineNumberWidth()

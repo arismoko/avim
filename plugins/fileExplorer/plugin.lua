@@ -1,6 +1,6 @@
 local function init(components)
     local View = components.View
-    local Avim = components.Avim
+    local BufferHandler = components.bufferHandler
     local KeyHandler = components.KeyHandler
 
     local function openFileExplorer()
@@ -145,8 +145,8 @@ local function init(components)
                         shell.setDir(fullPath)
                         refreshFiles()
                     else
-                        Avim.filename = fullPath
-                        Avim:loadFile(fullPath)
+                        BufferHandler.filename = fullPath
+                        BufferHandler:loadFile(fullPath)
                         fileExplorerWindow:close()
                         return
                     end

@@ -3,7 +3,7 @@ SCREENWIDTH, SCREENHEIGHT = term.getSize()
 
 -- Load core components
 local View = require("View"):getInstance()
-local Avim = require("Avim"):getInstance()
+local bufferHandler = require("BufferHandler"):getInstance()
 local KeyHandler = require("KeyHandler"):getInstance()
 local CommandHandler = require("CommandHandler"):getInstance()
 
@@ -38,7 +38,7 @@ local function loadPlugin(pluginName)
             if plugin and plugin.init then
                 plugin.init({
                     View = View,
-                    Avim = Avim,
+                    bufferHandler = bufferHandler,
                     KeyHandler = KeyHandler,
                     CommandHandler = CommandHandler
                 })
@@ -148,8 +148,8 @@ end
 -- Main event loop
 local function eventLoop()
     View:drawScreen()
-    while not Avim.shouldExit do
-        KeyHandler:handleInputEvent(Avim.mode, Avim, View, CommandHandler)
+    while not bufferHandler.shouldExit do
+        KeyHandler:handleInputEvent(bufferHandler.mode, bufferHandler, View, CommandHandler)
         View:drawScreen()
         View:updateCursor()
 
@@ -163,7 +163,7 @@ local function handleMainMenu()
     while true do
         term.clear()
         term.setCursorPos(1, 1)
-        print("Welcome to AVIM")
+        print("Welcome to bufferHandler")
         print("1. Create New File")
         print("2. Open File")
         print("3. Manage Plugins")
@@ -175,21 +175,21 @@ local function handleMainMenu()
         if key == keys.one then
             local filename = handleFileOperation("Enter filename:")
             if filename and filename ~= "" then
-                Avim.filename = filename
-                Avim:loadFile(Avim.filename)
+                bufferHandler.filename = filename
+                bufferHandler:loadFile(bufferHandler.filename)
                 eventLoop()
             end
         elseif key == keys.two then
             local filename = handleFileOperation("Enter filename:")
             if filename and filename ~= "" then
-                Avim.filename = filename
-                Avim:loadFile(Avim.filename)
+                bufferHandler.filename = filename
+                bufferHandler:loadFile(bufferHandler.filename)
                 eventLoop()
             end
         elseif key == keys.three then
             managePlugins()
         elseif key == keys.four then
-            Avim.shouldExit = true
+            bufferHandler.shouldExit = true
             return
         end
     end

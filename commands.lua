@@ -1,440 +1,440 @@
 -- commands.lua
 local CommandHandler = require("CommandHandler"):getInstance()
-local avim = require("Avim"):getInstance()
+local bufferHandler = require("BufferHandler"):getInstance()
 local View = require("View"):getInstance()
 
 -- === Basic Navigation ===
 CommandHandler:map("move_left", function()
-    avim.cursorX = math.max(1, avim.cursorX - 1)
+    bufferHandler.cursorX = math.max(1, bufferHandler.cursorX - 1)
 end)
 
 CommandHandler:map("move_down", function()
-    if avim.cursorY < #avim.buffer then
-        avim.cursorY = avim.cursorY + 1
+    if bufferHandler.cursorY < #bufferHandler.buffer then
+        bufferHandler.cursorY = bufferHandler.cursorY + 1
     end
-    avim.cursorX = math.min(avim.cursorX, #avim.buffer[avim.cursorY] + 1)
+    bufferHandler.cursorX = math.min(bufferHandler.cursorX, #bufferHandler.buffer[bufferHandler.cursorY] + 1)
 end)
 
 CommandHandler:map("move_up", function()
-    if avim.cursorY > 1 then
-        avim.cursorY = avim.cursorY - 1
+    if bufferHandler.cursorY > 1 then
+        bufferHandler.cursorY = bufferHandler.cursorY - 1
     end
-    avim.cursorX = math.min(avim.cursorX, #avim.buffer[avim.cursorY] + 1)
+    bufferHandler.cursorX = math.min(bufferHandler.cursorX, #bufferHandler.buffer[bufferHandler.cursorY] + 1)
 end)
 
 CommandHandler:map("move_right", function()
-    avim.cursorX = math.min(#avim.buffer[avim.cursorY] + 1, avim.cursorX + 1)
+    bufferHandler.cursorX = math.min(#bufferHandler.buffer[bufferHandler.cursorY] + 1, bufferHandler.cursorX + 1)
 end)
 
 -- === File and Screen Navigation ===
 CommandHandler:map("move_to_top", function()
-    avim.cursorY = 1
-    avim.cursorX = 1
-    avim:updateScroll()
+    bufferHandler.cursorY = 1
+    bufferHandler.cursorX = 1
+    bufferHandler:updateScroll()
 end)
 
 CommandHandler:map("move_to_bottom", function()
-    avim.cursorY = #avim.buffer
-    avim.cursorX = 1
-    avim:updateScroll()
+    bufferHandler.cursorY = #bufferHandler.buffer
+    bufferHandler.cursorX = 1
+    bufferHandler:updateScroll()
 end)
 
 CommandHandler:map("move_to_top_of_screen", function()
-    local screenStart = avim.scrollOffset + 1
-    avim.cursorY = screenStart
-    avim.cursorX = 1
-    avim:updateStatusBar("Moved to top of screen")
+    local screenStart = bufferHandler.scrollOffset + 1
+    bufferHandler.cursorY = screenStart
+    bufferHandler.cursorX = 1
+    bufferHandler:updateStatusBar("Moved to top of screen")
 end)
 
 CommandHandler:map("move_to_middle_of_screen", function()
     local screenHeight = SCREENHEIGHT
     local screenMiddle = math.floor(screenHeight / 2)
-    avim.cursorY = avim.scrollOffset + screenMiddle
-    avim.cursorX = 1
-    avim:updateStatusBar("Moved to middle of screen")
+    bufferHandler.cursorY = bufferHandler.scrollOffset + screenMiddle
+    bufferHandler.cursorX = 1
+    bufferHandler:updateStatusBar("Moved to middle of screen")
 end)
 
 CommandHandler:map("move_to_bottom_of_screen", function()
     local screenHeight = SCREENHEIGHT
-    local screenEnd = avim.scrollOffset + screenHeight - 1
-    avim.cursorY = screenEnd
-    avim.cursorX = 1
-    avim:updateStatusBar("Moved to bottom of screen")
+    local screenEnd = bufferHandler.scrollOffset + screenHeight - 1
+    bufferHandler.cursorY = screenEnd
+    bufferHandler.cursorX = 1
+    bufferHandler:updateStatusBar("Moved to bottom of screen")
 end)
 
 -- === Word and Line Motions ===
 CommandHandler:map("move_word_forward", function()
-    local line = avim.buffer[avim.cursorY]
-    local nextSpace = line:find("%s", avim.cursorX)
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
+    local nextSpace = line:find("%s", bufferHandler.cursorX)
     if nextSpace then
-        avim.cursorX = nextSpace + 1
+        bufferHandler.cursorX = nextSpace + 1
     else
-        avim.cursorX = #line + 1
+        bufferHandler.cursorX = #line + 1
     end
 end)
 
 CommandHandler:map("move_word_start", function()
-    local line = avim.buffer[avim.cursorY]
-    local nextSpace = line:find("%s", avim.cursorX)
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
+    local nextSpace = line:find("%s", bufferHandler.cursorX)
     if nextSpace then
         local nextWordStart = line:find("%S", nextSpace + 1)
         if nextWordStart then
-            avim.cursorX = nextWordStart
+            bufferHandler.cursorX = nextWordStart
         else
-            avim.cursorX = #line + 1
+            bufferHandler.cursorX = #line + 1
         end
     else
-        avim.cursorX = #line + 1
+        bufferHandler.cursorX = #line + 1
     end
 end)
 
 CommandHandler:map("move_word_back", function()
-    local line = avim.buffer[avim.cursorY]
-    local prevSpace = line:sub(1, avim.cursorX - 1):find("%s[^%s]*$")
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
+    local prevSpace = line:sub(1, bufferHandler.cursorX - 1):find("%s[^%s]*$")
     if prevSpace then
-        avim.cursorX = prevSpace
+        bufferHandler.cursorX = prevSpace
     else
-        avim.cursorX = 1
+        bufferHandler.cursorX = 1
     end
 end)
 
 CommandHandler:map("move_word_end", function()
-    local line = avim.buffer[avim.cursorY]
-    local nextWordEnd = line:find("[^%s]+", avim.cursorX)
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
+    local nextWordEnd = line:find("[^%s]+", bufferHandler.cursorX)
     if nextWordEnd then
-        avim.cursorX = nextWordEnd + line:sub(nextWordEnd):find("%s") - 1
+        bufferHandler.cursorX = nextWordEnd + line:sub(nextWordEnd):find("%s") - 1
     else
-        avim.cursorX = #line + 1
+        bufferHandler.cursorX = #line + 1
     end
 end)
 
 CommandHandler:map("move_to_line_start", function()
-    avim.cursorX = 1
+    bufferHandler.cursorX = 1
 end)
 
 CommandHandler:map("move_to_line_end", function()
-    avim.cursorX = #avim.buffer[avim.cursorY] + 1
+    bufferHandler.cursorX = #bufferHandler.buffer[bufferHandler.cursorY] + 1
 end)
 
 CommandHandler:map("move_to_first_non_blank", function()
-    local line = avim.buffer[avim.cursorY]
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
     local firstNonBlank = line:find("%S")
     if firstNonBlank then
-        avim.cursorX = firstNonBlank
+        bufferHandler.cursorX = firstNonBlank
     else
-        avim.cursorX = 1
+        bufferHandler.cursorX = 1
     end
 end)
 
 -- === Paragraph Motions ===
 CommandHandler:map("move_paragraph_back", function()
-    local cursorY = avim.cursorY
+    local cursorY = bufferHandler.cursorY
     while cursorY > 1 do
         cursorY = cursorY - 1
-        if avim.buffer[cursorY]:match("^%s*$") then
-            avim.cursorY = cursorY
-            avim:updateScroll()
-            avim:updateStatusBar("Moved to Previous Paragraph")
+        if bufferHandler.buffer[cursorY]:match("^%s*$") then
+            bufferHandler.cursorY = cursorY
+            bufferHandler:updateScroll()
+            bufferHandler:updateStatusBar("Moved to Previous Paragraph")
             return
         end
     end
-    avim:updateStatusError("No previous paragraph found")
+    bufferHandler:updateStatusError("No previous paragraph found")
 end)
 
 CommandHandler:map("move_paragraph_forward", function()
-    local cursorY = avim.cursorY
-    while cursorY < #avim.buffer do
+    local cursorY = bufferHandler.cursorY
+    while cursorY < #bufferHandler.buffer do
         cursorY = cursorY + 1
-        if avim.buffer[cursorY]:match("^%s*$") then
-            avim.cursorY = cursorY + 1
-            avim:updateScroll()
-            avim:updateStatusBar("Moved to Next Paragraph")
+        if bufferHandler.buffer[cursorY]:match("^%s*$") then
+            bufferHandler.cursorY = cursorY + 1
+            bufferHandler:updateScroll()
+            bufferHandler:updateStatusBar("Moved to Next Paragraph")
             return
         end
     end
-    avim:updateStatusError("No next paragraph found")
+    bufferHandler:updateStatusError("No next paragraph found")
 end)
 
 -- === Editing ===
 CommandHandler:map("delete_char", function()
-    local line = avim.buffer[avim.cursorY]
-    if avim.cursorX <= #line then
-        avim.buffer[avim.cursorY] = line:sub(1, avim.cursorX - 1) .. line:sub(avim.cursorX + 1)
-        avim:updateStatusBar("Deleted character")
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
+    if bufferHandler.cursorX <= #line then
+        bufferHandler.buffer[bufferHandler.cursorY] = line:sub(1, bufferHandler.cursorX - 1) .. line:sub(bufferHandler.cursorX + 1)
+        bufferHandler:updateStatusBar("Deleted character")
     else
-        avim:updateStatusError("Nothing to delete")
+        bufferHandler:updateStatusError("Nothing to delete")
     end
 end)
 
 CommandHandler:map("delete_char_before", function()
-    local line = avim.buffer[avim.cursorY]
-    if avim.cursorX > 1 then
-        avim.buffer[avim.cursorY] = line:sub(1, avim.cursorX - 2) .. line:sub(avim.cursorX)
-        avim.cursorX = avim.cursorX - 1
-        avim:updateStatusBar("Deleted character")
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
+    if bufferHandler.cursorX > 1 then
+        bufferHandler.buffer[bufferHandler.cursorY] = line:sub(1, bufferHandler.cursorX - 2) .. line:sub(bufferHandler.cursorX)
+        bufferHandler.cursorX = bufferHandler.cursorX - 1
+        bufferHandler:updateStatusBar("Deleted character")
     else
-        avim:updateStatusError("Nothing to delete")
+        bufferHandler:updateStatusError("Nothing to delete")
     end
 end)
 
 CommandHandler:map("cut_line", function()
-    avim:cutLine()
+    bufferHandler:cutLine()
 end)
 
 CommandHandler:map("delete_word", function()
-    local line = avim.buffer[avim.cursorY]
-    local nextSpace = line:find("%s", avim.cursorX)
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
+    local nextSpace = line:find("%s", bufferHandler.cursorX)
     if nextSpace then
-        line = line:sub(1, avim.cursorX - 1) .. line:sub(nextSpace + 1)
+        line = line:sub(1, bufferHandler.cursorX - 1) .. line:sub(nextSpace + 1)
     else
-        line = line:sub(1, avim.cursorX - 1)
+        line = line:sub(1, bufferHandler.cursorX - 1)
     end
-    avim.buffer[avim.cursorY] = line
-    avim:updateStatusBar("Deleted word")
+    bufferHandler.buffer[bufferHandler.cursorY] = line
+    bufferHandler:updateStatusBar("Deleted word")
 end)
 
 CommandHandler:map("change_word", function()
-    local line = avim.buffer[avim.cursorY]
-    local nextSpace = line:find("%s", avim.cursorX)
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
+    local nextSpace = line:find("%s", bufferHandler.cursorX)
     if nextSpace then
-        line = line:sub(1, avim.cursorX - 1) .. line:sub(nextSpace + 1)
+        line = line:sub(1, bufferHandler.cursorX - 1) .. line:sub(nextSpace + 1)
     else
-        line = line:sub(1, avim.cursorX - 1)
+        line = line:sub(1, bufferHandler.cursorX - 1)
     end
-    avim.buffer[avim.cursorY] = line
-    avim:switchMode("insert")
+    bufferHandler.buffer[bufferHandler.cursorY] = line
+    bufferHandler:switchMode("insert")
 end)
 
 CommandHandler:map("yank_line", function()
-    avim:yankLine()
+    bufferHandler:yankLine()
 end)
 
 
 CommandHandler:map("yank_visual_selection", function()
-    avim:yankSelection()
+    bufferHandler:yankSelection()
 end)
 
 CommandHandler:map("paste_clipboard", function()
     local event, clipboardText = os.pullEvent("paste")
     if clipboardText then
-        avim:insertTextAtCursor(clipboardText)
-        avim:updateScroll(SCREENHEIGHT)
-        avim:updateStatusBar("Pasted text from clipboard")
+        bufferHandler:insertTextAtCursor(clipboardText)
+        bufferHandler:updateScroll(SCREENHEIGHT)
+        bufferHandler:updateStatusBar("Pasted text from clipboard")
     else
-        avim:updateStatusError("No text in clipboard or paste operation failed")
+        bufferHandler:updateStatusError("No text in clipboard or paste operation failed")
     end
 end)
 
 CommandHandler:map("paste", function()
-    avim:paste()
-    avim:updateStatusBar("Pasted text")
+    bufferHandler:paste()
+    bufferHandler:updateStatusBar("Pasted text")
 end)
 
 CommandHandler:map("undo", function()
-    avim:undo()
+    bufferHandler:undo()
 end)
 
 CommandHandler:map("redo", function()
-    avim:redo()
+    bufferHandler:redo()
 end)
 
 -- === Mode Switching ===
 CommandHandler:map("enter_insert_mode", function()
-    avim:switchMode("insert")
+    bufferHandler:switchMode("insert")
 end)
 
 CommandHandler:map("append_to_line", function()
-    avim.cursorX = math.min(avim.cursorX + 1, #avim.buffer[avim.cursorY] + 1)
-    avim:switchMode("insert")
+    bufferHandler.cursorX = math.min(bufferHandler.cursorX + 1, #bufferHandler.buffer[bufferHandler.cursorY] + 1)
+    bufferHandler:switchMode("insert")
 end)
 
 CommandHandler:map("append_to_line_end", function()
-    avim.cursorX = #avim.buffer[avim.cursorY] + 1
-    avim:switchMode("insert")
+    bufferHandler.cursorX = #bufferHandler.buffer[bufferHandler.cursorY] + 1
+    bufferHandler:switchMode("insert")
 end)
 
 CommandHandler:map("insert_at_line_start", function()
-    local line = avim.buffer[avim.cursorY]
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
     local firstNonBlank = line:find("%S")
     if firstNonBlank then
-        avim.cursorX = firstNonBlank
+        bufferHandler.cursorX = firstNonBlank
     else
-        avim.cursorX = 1
+        bufferHandler.cursorX = 1
     end
-    avim:switchMode("insert")
+    bufferHandler:switchMode("insert")
 end)
 
 CommandHandler:map("open_line_below", function()
-    local line = avim.cursorY
-    table.insert(avim.buffer, line + 1, "")
-    avim.cursorY = line + 1
-    avim.cursorX = 1
-    avim:switchMode("insert")
+    local line = bufferHandler.cursorY
+    table.insert(bufferHandler.buffer, line + 1, "")
+    bufferHandler.cursorY = line + 1
+    bufferHandler.cursorX = 1
+    bufferHandler:switchMode("insert")
 end)
 
 CommandHandler:map("open_line_above", function()
-    local line = avim.cursorY
-    table.insert(avim.buffer, line, "")
-    avim.cursorY = line
-    avim.cursorX = 1
-    avim:switchMode("insert")
+    local line = bufferHandler.cursorY
+    table.insert(bufferHandler.buffer, line, "")
+    bufferHandler.cursorY = line
+    bufferHandler.cursorX = 1
+    bufferHandler:switchMode("insert")
 end)
 
 CommandHandler:map("enter_command_mode", function()
-    avim:switchMode("command")
+    bufferHandler:switchMode("command")
 end)
 
 CommandHandler:map("enter_visual_mode", function()
-    avim:startVisualMode()
+    bufferHandler:startVisualMode()
 end)
 
 CommandHandler:map("end_visual_mode", function()
-    avim:endVisualMode()
+    bufferHandler:endVisualMode()
 end)
 
 -- === Search and Replace Commands ===
 CommandHandler:map("search", function(pattern)
     if not pattern then
-        pattern = avim.lastSearchPattern
+        pattern = bufferHandler.lastSearchPattern
         if not pattern then
-            avim:updateStatusError("No previous search pattern to repeat")
+            bufferHandler:updateStatusError("No previous search pattern to repeat")
             return
         end
     else
-        avim.lastSearchPattern = pattern
-        avim.lastSearchPosition = { y = avim.cursorY, x = avim.cursorX + 1 }
+        bufferHandler.lastSearchPattern = pattern
+        bufferHandler.lastSearchPosition = { y = bufferHandler.cursorY, x = bufferHandler.cursorX + 1 }
     end
 
-    local startSearchY = avim.lastSearchPosition.y
-    local startSearchX = avim.lastSearchPosition.x
+    local startSearchY = bufferHandler.lastSearchPosition.y
+    local startSearchX = bufferHandler.lastSearchPosition.x
 
-    for y = startSearchY, #avim.buffer do
-        local line = avim.buffer[y]
+    for y = startSearchY, #bufferHandler.buffer do
+        local line = bufferHandler.buffer[y]
         local startX, endX = line:find(pattern, (y == startSearchY) and startSearchX or 1)
 
         if startX then
-            avim.cursorY = y
-            avim.cursorX = startX
-            avim:updateScroll(SCREENHEIGHT)
-            avim:updateStatusBar("Found '" .. pattern .. "' at line " .. y)
+            bufferHandler.cursorY = y
+            bufferHandler.cursorX = startX
+            bufferHandler:updateScroll(SCREENHEIGHT)
+            bufferHandler:updateStatusBar("Found '" .. pattern .. "' at line " .. y)
 
-            avim.lastSearchPosition = { y = y, x = endX + 1 }
+            bufferHandler.lastSearchPosition = { y = y, x = endX + 1 }
 
-            if y == startSearchY and startX <= avim.cursorX then
-                avim.lastSearchPosition = { y = startSearchY, x = 1 }
+            if y == startSearchY and startX <= bufferHandler.cursorX then
+                bufferHandler.lastSearchPosition = { y = startSearchY, x = 1 }
             end
 
             return
         end
 
-        avim.lastSearchPosition.x = 1
+        bufferHandler.lastSearchPosition.x = 1
     end
 
-    avim:updateStatusError("Pattern '" .. pattern .. "' not found")
-    avim.lastSearchPosition = { y = 1, x = 1 }
+    bufferHandler:updateStatusError("Pattern '" .. pattern .. "' not found")
+    bufferHandler.lastSearchPosition = { y = 1, x = 1 }
 end)
 
 CommandHandler:map("replace", function(oldPattern, newPattern)
     if not oldPattern or not newPattern then
-        avim:updateStatusError("Usage: :replace <old> <new>")
+        bufferHandler:updateStatusError("Usage: :replace <old> <new>")
         return
     end
 
-    avim.lastReplacePattern = oldPattern
-    avim.replaceWithPattern = newPattern
-    avim.lastReplacePosition = { y = avim.cursorY, x = avim.cursorX + 1 }
+    bufferHandler.lastReplacePattern = oldPattern
+    bufferHandler.replaceWithPattern = newPattern
+    bufferHandler.lastReplacePosition = { y = bufferHandler.cursorY, x = bufferHandler.cursorX + 1 }
 
     local replacements = 0
 
-    local startReplaceY = avim.lastReplacePosition.y
-    local startReplaceX = avim.lastReplacePosition.x
+    local startReplaceY = bufferHandler.lastReplacePosition.y
+    local startReplaceX = bufferHandler.lastReplacePosition.x
 
-    for y = startReplaceY, #avim.buffer do
-        local line = avim.buffer[y]
+    for y = startReplaceY, #bufferHandler.buffer do
+        local line = bufferHandler.buffer[y]
         local startX, endX = line:find(oldPattern, (y == startReplaceY) and startReplaceX or 1)
 
         if startX then
             local newLine = line:sub(1, startX - 1) .. newPattern .. line:sub(endX + 1)
-            avim.buffer[y] = newLine
+            bufferHandler.buffer[y] = newLine
             replacements = replacements + 1
 
-            avim.cursorY = y
-            avim.cursorX = startX
-            avim:updateScroll(SCREENHEIGHT)
-            avim:updateStatusBar("Replaced '" .. oldPattern .. "' with '" .. newPattern .. "' at line " .. y)
+            bufferHandler.cursorY = y
+            bufferHandler.cursorX = startX
+            bufferHandler:updateScroll(SCREENHEIGHT)
+            bufferHandler:updateStatusBar("Replaced '" .. oldPattern .. "' with '" .. newPattern .. "' at line " .. y)
 
-            avim.lastReplacePosition = { y = y, x = startX + #newPattern }
+            bufferHandler.lastReplacePosition = { y = y, x = startX + #newPattern }
 
-            if y == startReplaceY and startX <= avim.cursorX then
-                avim.lastReplacePosition = { y = startSearchY, x = 1 }
+            if y == startReplaceY and startX <= bufferHandler.cursorX then
+                bufferHandler.lastReplacePosition = { y = startSearchY, x = 1 }
             end
 
             return
         end
 
-        avim.lastReplacePosition.x = 1
+        bufferHandler.lastReplacePosition.x = 1
     end
 
-    avim:updateStatusError("No more occurrences of '" .. oldPattern .. "' found")
-    avim.lastReplacePosition = { y = 1, x = 1 }
+    bufferHandler:updateStatusError("No more occurrences of '" .. oldPattern .. "' found")
+    bufferHandler.lastReplacePosition = { y = 1, x = 1 }
 end)
 
 CommandHandler:map("replace_all", function(oldPattern, newPattern)
     if not oldPattern or not newPattern then
-        avim:updateStatusError("Usage: :replace_all <old> <new>")
+        bufferHandler:updateStatusError("Usage: :replace_all <old> <new>")
         return
     end
 
     local replacements = 0
 
-    for y, line in ipairs(avim.buffer) do
+    for y, line in ipairs(bufferHandler.buffer) do
         local newLine, count = line:gsub(oldPattern, newPattern)
         if count > 0 then
-            avim.buffer[y] = newLine
+            bufferHandler.buffer[y] = newLine
             replacements = replacements + count
         end
     end
 
     if replacements > 0 then
-        avim:updateScroll(SCREENHEIGHT)
-        avim:updateStatusBar("Replaced " .. replacements .. " occurrence(s) of '" .. oldPattern .. "' with '" .. newPattern .. "'")
+        bufferHandler:updateScroll(SCREENHEIGHT)
+        bufferHandler:updateStatusBar("Replaced " .. replacements .. " occurrence(s) of '" .. oldPattern .. "' with '" .. newPattern .. "'")
     else
-        avim:updateStatusError("No occurrences of '" .. oldPattern .. "' found")
+        bufferHandler:updateStatusError("No occurrences of '" .. oldPattern .. "' found")
     end
 end)
 
 CommandHandler:map("goto_line", function(lineNumber)
     lineNumber = tonumber(lineNumber)
-    if not lineNumber or lineNumber < 1 or lineNumber > #avim.buffer then
-        avim:updateStatusError("Invalid line number: " .. (lineNumber or ""))
+    if not lineNumber or lineNumber < 1 or lineNumber > #bufferHandler.buffer then
+        bufferHandler:updateStatusError("Invalid line number: " .. (lineNumber or ""))
         return
     end
-    avim.cursorY = lineNumber
-    avim.cursorX = 1
-    avim:updateScroll(SCREENHEIGHT)
-    avim:updateStatusBar("Moved to line " .. lineNumber)
+    bufferHandler.cursorY = lineNumber
+    bufferHandler.cursorX = 1
+    bufferHandler:updateScroll(SCREENHEIGHT)
+    bufferHandler:updateStatusBar("Moved to line " .. lineNumber)
 end)
 
 -- === Miscellaneous ===
 CommandHandler:map("exit_editor", function()
-    avim.shouldExit = true
+    bufferHandler.shouldExit = true
 end)
 
 CommandHandler:map("qa", function()
-    avim.shouldExit = true
+    bufferHandler.shouldExit = true
 end)
 CommandHandler:map("save_file", function()
-    avim:saveFile()
+    bufferHandler:saveFile()
 end)
 CommandHandler:map("w", function()
-    avim:saveFile()
+    bufferHandler:saveFile()
 end)
 
 CommandHandler:map("show_keybindings", function()
     local keyHandler = KeyHandler:getInstance() -- Ensure instance is initialized
     local view = View:getInstance()
     local keybindsWindow = view:createWindow(1, 1, SCREENWIDTH, SCREENHEIGHT - 1, colors.lightGray, colors.black)
-    local currentMode = avim.mode -- Get the current mode from the model
+    local currentMode = bufferHandler.mode -- Get the current mode from the model
     local descriptions = keyHandler:getKeyDescriptions(currentMode)
 
     local startIndex = 1
@@ -476,452 +476,355 @@ end)
 CommandHandler:map("close_windows", function()
     View:closeAllWindows()
 end)
-
 -- === Insert Mode Keybindings ===
 CommandHandler:map("insert_backspace", function()
-    if avim.autocompleteWindow then
-        -- If autocomplete is open, close it on backspace
-        avim.autocompleteWindow:close()
-        avim.autocompleteWindow = nil
-        avim.suggestions = nil
-    else
-        -- Otherwise, perform the backspace action
-        avim:backspace()
-        avim:markDirty(avim.cursorY)
-        View:updateCursor()
-    end
+    -- Perform the backspace action
+    bufferHandler:backspace()
     View:drawScreen()
 end)
 
 CommandHandler:map("insert_exit_to_normal", function()
-    avim:switchMode("normal")
-    if avim.autocompleteWindow then
-        avim.autocompleteWindow:close()
-    end
-    avim.autocompleteWindow = nil
-    avim.suggestions = nil
-    avim:markDirty(avim.cursorY)
+    bufferHandler:switchMode("normal")
     View:drawScreen()
 end)
 
 CommandHandler:map("insert_arrow_up", function()
-    if avim.autocompleteWindow and avim.suggestions then
-        -- Move selection up in the autocomplete window
-        table.insert(avim.suggestions, 1, table.remove(avim.suggestions))
-        View:showAutocompleteWindow(avim.suggestions)
-        avim:updateStatusBar("new sugg. selected: " .. avim.suggestions[1])
-    else
-        -- Normal cursor up movement
-        avim:moveCursorUp()
-        View:updateCursor()
-    end
-    avim:markDirty(avim.cursorY)
+    -- Normal cursor up movement
+    bufferHandler:moveCursorUp()
     View:drawScreen()
 end)
 
 CommandHandler:map("insert_arrow_down", function()
-    if avim.autocompleteWindow and avim.suggestions then
-        -- Move selection down in the autocomplete window
-        table.insert(avim.suggestions, table.remove(avim.suggestions, 1))
-        View:showAutocompleteWindow(avim.suggestions)
-        avim:updateStatusBar("new sugg. selected: " .. avim.suggestions[1])
-    else
-        -- Normal cursor down movement
-        avim:moveCursorDown()
-        View:updateCursor()
-    end
-    avim:markDirty(avim.cursorY)
+    -- Normal cursor down movement
+    bufferHandler:moveCursorDown()
     View:drawScreen()
 end)
 
 CommandHandler:map("insert_arrow_left", function()
-    if avim.autocompleteWindow then
-        -- Close the autocomplete window on left arrow
-        avim.autocompleteWindow:close()
-        avim.autocompleteWindow = nil
-        avim.suggestions = nil
-    end
     -- Normal cursor left movement
-    avim:moveCursorLeft()
-    View:updateCursor()
-    avim:markDirty(avim.cursorY)
+    bufferHandler:moveCursorLeft()
     View:drawScreen()
 end)
 
 CommandHandler:map("insert_arrow_right", function()
-    if avim.autocompleteWindow and avim.suggestions then
-        -- Accept current autocomplete suggestion and close the window
-        local selectedSuggestion = avim.suggestions[1]
-        if selectedSuggestion then
-            local currentWord = avim:getWordAtCursor()
-            local suffix = selectedSuggestion:sub(#currentWord + 1)
-            avim:insertChar(suffix)
-            avim.cursorX = #avim.buffer[avim.cursorY] + 1
-        end
-        avim.autocompleteWindow:close()
-        avim.autocompleteWindow = nil
-        avim.suggestions = nil
-    else
-        -- Normal cursor right movement
-        avim:moveCursorRight()
-        View:updateCursor()
-    end
-    avim:markDirty(avim.cursorY)
+    -- Normal cursor right movement
+    bufferHandler:moveCursorRight()
     View:drawScreen()
 end)
 
 CommandHandler:map("insert_tab", function()
-    if avim.autocompleteWindow and avim.suggestions then
-        -- If autocomplete is open, treat Tab as selecting the current suggestion
-        local selectedSuggestion = avim.suggestions[1]
-        if selectedSuggestion then
-            local currentWord = avim:getWordAtCursor()
-            local suffix = selectedSuggestion:sub(#currentWord + 1)
-            avim:insertChar(suffix)
-            avim.cursorX = #avim.buffer[avim.cursorY] + 1
-        end
-        avim.autocompleteWindow:close()
-        avim.autocompleteWindow = nil
-        avim.suggestions = nil
-    else
-        -- Otherwise, insert a tab character
-        avim:insertChar("    ")
-        avim:markDirty(avim.cursorY)
-        View:drawLine(avim.cursorY - avim.scrollOffset)
-        View:updateCursor()
-    end
+    -- Insert a tab character
+    bufferHandler:insertChar("    ")
+    View:drawLine(bufferHandler.cursorY - bufferHandler.scrollOffset)
     View:drawScreen()
 end)
 
 CommandHandler:map("insert_enter", function()
-    if avim.autocompleteWindow and avim.suggestions then
-        -- If autocomplete is open, treat Enter as selecting the current suggestion
-        local selectedSuggestion = avim.suggestions[1]
-        if selectedSuggestion then
-            local currentWord = avim:getWordAtCursor()
-            local suffix = selectedSuggestion:sub(#currentWord + 1)
-            avim:insertChar(suffix)
-            avim.cursorX = #avim.buffer[avim.cursorY] + 1
-        end
-        avim.autocompleteWindow:close()
-        avim.autocompleteWindow = nil
-        avim.suggestions = nil
-    else
-        -- Otherwise, insert a new line
-        avim:enter()
-        avim:markDirty(avim.cursorY)
-        View:updateCursor()
-    end
+    -- Insert a new line
+    bufferHandler:enter()
     View:drawScreen()
 end)
+
 -- === Change Line ===
 CommandHandler:map("change_line", function()
-    avim:cutLine()  -- Cuts the current line
-    avim:switchMode("insert")
+    bufferHandler:cutLine()  -- Cuts the current line
+    bufferHandler:switchMode("insert")
 end)
 
 -- === Search Next ===
 CommandHandler:map("search_next", function()
-    if avim.lastSearchPattern then
-        CommandHandler:execute("search", avim.lastSearchPattern)
+    if bufferHandler.lastSearchPattern then
+        CommandHandler:execute("search", bufferHandler.lastSearchPattern)
     else
-        avim:updateStatusError("No previous search pattern to repeat")
+        bufferHandler:updateStatusError("No previous search pattern to repeat")
     end
 end)
 -- === Searching within the Line ===
 CommandHandler:map("find_character", function()
-    avim:switchMode("command", "find ")
+    bufferHandler:switchMode("command", "find ")
 end)
 
 CommandHandler:map("find_before_character", function()
-    avim:switchMode("command", "find_before ")
+    bufferHandler:switchMode("command", "find_before ")
 end)
 
 -- === Repeating Last Character Search ===
 CommandHandler:map("repeat_last_find", function()
-    if avim.lastFindCharacter then
+    if bufferHandler.lastFindCharacter then
         CommandHandler:execute("find_character")
     else
-        avim:updateStatusError("No previous find to repeat")
+        bufferHandler:updateStatusError("No previous find to repeat")
     end
 end)
 
 CommandHandler:map("repeat_last_find_reverse", function()
-    if avim.lastFindCharacter then
+    if bufferHandler.lastFindCharacter then
         -- Implement reverse find logic here
     else
-        avim:updateStatusError("No previous find to repeat")
+        bufferHandler:updateStatusError("No previous find to repeat")
     end
 end)
 
 CommandHandler:map("delete_visual_selection", function()
-    if not avim.visualStartX or not avim.visualStartY then
-        avim:updateStatusError("No selection to delete")
+    if not bufferHandler.visualStartX or not bufferHandler.visualStartY then
+        bufferHandler:updateStatusError("No selection to delete")
         return
     end
 
     -- Save current state for undo
-    avim:saveToHistory()
+    bufferHandler:saveToHistory()
 
     -- Determine the range of the selection
-    local startX, startY = math.min(avim.cursorX, avim.visualStartX), math.min(avim.cursorY, avim.visualStartY)
-    local endX, endY = math.max(avim.cursorX, avim.visualStartX), math.max(avim.cursorY, avim.visualStartY)
+    local startX, startY = math.min(bufferHandler.cursorX, bufferHandler.visualStartX), math.min(bufferHandler.cursorY, bufferHandler.visualStartY)
+    local endX, endY = math.max(bufferHandler.cursorX, bufferHandler.visualStartX), math.max(bufferHandler.cursorY, bufferHandler.visualStartY)
 
     -- Delete the selected text
     for y = startY, endY do
-        local line = avim.buffer[y]
+        local line = bufferHandler.buffer[y]
         if y == startY and y == endY then
             -- Single-line selection
-            avim.buffer[y] = line:sub(1, startX - 1) .. line:sub(endX)
+            bufferHandler.buffer[y] = line:sub(1, startX - 1) .. line:sub(endX)
         elseif y == startY then
             -- Start of multi-line selection
-            avim.buffer[y] = line:sub(1, startX - 1)
+            bufferHandler.buffer[y] = line:sub(1, startX - 1)
         elseif y == endY then
             -- End of multi-line selection
-            avim.buffer[y] = line:sub(endX)
+            bufferHandler.buffer[y] = line:sub(endX)
         else
             -- Middle lines of multi-line selection
-            avim.buffer[y] = ""
+            bufferHandler.buffer[y] = ""
         end
-        avim:markDirty(y) -- Mark affected lines as dirty
     end
 
     -- Adjust cursor position after deletion
-    avim.cursorX = startX
-    avim.cursorY = startY
+    bufferHandler.cursorX = startX
+    bufferHandler.cursorY = startY
 
     -- Handle merging of lines if multi-line selection was deleted
     if startY ~= endY then
-        avim.buffer[startY] = avim.buffer[startY] .. (avim.buffer[startY + 1] or "")
-        table.remove(avim.buffer, startY + 1)
+        bufferHandler.buffer[startY] = bufferHandler.buffer[startY] .. (bufferHandler.buffer[startY + 1] or "")
+        table.remove(bufferHandler.buffer, startY + 1)
     end
 
     -- End visual mode
     CommandHandler:execute("end_visual_mode")
 
-    avim:updateStatusBar("Deleted visual selection")
+    bufferHandler:updateStatusBar("Deleted visual selection")
 end)
 CommandHandler:map("cut_visual_selection", function()
-    if not avim.visualStartX or not avim.visualStartY then
-        avim:updateStatusError("No selection to cut")
+    if not bufferHandler.visualStartX or not bufferHandler.visualStartY then
+        bufferHandler:updateStatusError("No selection to cut")
         return
     end
 
     -- Save current state for undo
-    avim:saveToHistory()
+    bufferHandler:saveToHistory()
 
     -- Determine the range of the selection
-    local startX, startY = math.min(avim.cursorX, avim.visualStartX), math.min(avim.cursorY, avim.visualStartY)
-    local endX, endY = math.max(avim.cursorX, avim.visualStartX), math.max(avim.cursorY, avim.visualStartY)
+    local startX, startY = math.min(bufferHandler.cursorX, bufferHandler.visualStartX), math.min(bufferHandler.cursorY, bufferHandler.visualStartY)
+    local endX, endY = math.max(bufferHandler.cursorX, bufferHandler.visualStartX), math.max(bufferHandler.cursorY, bufferHandler.visualStartY)
 
     -- Clear the yank register
-    avim.yankRegister = ""
+    bufferHandler.yankRegister = ""
 
     -- Cut the selected text and save it to yank register
     for y = startY, endY do
-        local line = avim.buffer[y]
+        local line = bufferHandler.buffer[y]
         if y == startY and y == endY then
             -- Single-line selection
-            avim.yankRegister = line:sub(startX, endX - 1)
-            avim.buffer[y] = line:sub(1, startX - 1) .. line:sub(endX)
+            bufferHandler.yankRegister = line:sub(startX, endX - 1)
+            bufferHandler.buffer[y] = line:sub(1, startX - 1) .. line:sub(endX)
         elseif y == startY then
             -- Start of multi-line selection
-            avim.yankRegister = line:sub(startX) .. "\n"
-            avim.buffer[y] = line:sub(1, startX - 1)
+            bufferHandler.yankRegister = line:sub(startX) .. "\n"
+            bufferHandler.buffer[y] = line:sub(1, startX - 1)
         elseif y == endY then
             -- End of multi-line selection
-            avim.yankRegister = avim.yankRegister .. line:sub(1, endX - 1)
-            avim.buffer[y] = line:sub(endX)
+            bufferHandler.yankRegister = bufferHandler.yankRegister .. line:sub(1, endX - 1)
+            bufferHandler.buffer[y] = line:sub(endX)
         else
             -- Middle lines of multi-line selection
-            avim.yankRegister = avim.yankRegister .. line .. "\n"
-            avim.buffer[y] = ""
+            bufferHandler.yankRegister = bufferHandler.yankRegister .. line .. "\n"
+            bufferHandler.buffer[y] = ""
         end
-        avim:markDirty(y) -- Mark affected lines as dirty
     end
 
     -- Adjust cursor position after cutting
-    avim.cursorX = startX
-    avim.cursorY = startY
+    bufferHandler.cursorX = startX
+    bufferHandler.cursorY = startY
 
     -- Handle merging of lines if multi-line selection was cut
     if startY ~= endY then
-        avim.buffer[startY] = avim.buffer[startY] .. (avim.buffer[startY + 1] or "")
-        table.remove(avim.buffer, startY + 1)
+        bufferHandler.buffer[startY] = bufferHandler.buffer[startY] .. (bufferHandler.buffer[startY + 1] or "")
+        table.remove(bufferHandler.buffer, startY + 1)
     end
 
     -- End visual mode
     CommandHandler:execute("end_visual_mode")
 
-    avim:updateStatusBar("Cut visual selection")
+    bufferHandler:updateStatusBar("Cut visual selection")
 end)
 
 CommandHandler:map("unindent_visual_selection", function()
-    if not avim.visualStartX or not avim.visualStartY then
-        avim:updateStatusError("No selection to unindent")
+    if not bufferHandler.visualStartX or not bufferHandler.visualStartY then
+        bufferHandler:updateStatusError("No selection to unindent")
         return
     end
 
-    local startY = math.min(avim.cursorY, avim.visualStartY)
-    local endY = math.max(avim.cursorY, avim.visualStartY)
+    local startY = math.min(bufferHandler.cursorY, bufferHandler.visualStartY)
+    local endY = math.max(bufferHandler.cursorY, bufferHandler.visualStartY)
 
-    avim:saveToHistory()
+    bufferHandler:saveToHistory()
 
     for y = startY, endY do
-        if avim.buffer[y]:sub(1, 4) == "    " then
-            avim.buffer[y] = avim.buffer[y]:sub(5)
+        if bufferHandler.buffer[y]:sub(1, 4) == "    " then
+            bufferHandler.buffer[y] = bufferHandler.buffer[y]:sub(5)
         end
-        avim:markDirty(y)
     end
 
     CommandHandler:execute("end_visual_mode")
-    avim:updateStatusBar("Unindented visual selection")
+    bufferHandler:updateStatusBar("Unindented visual selection")
 end)
 CommandHandler:map("indent_visual_selection", function()
-    if not avim.visualStartX or not avim.visualStartY then
-        avim:updateStatusError("No selection to indent")
+    if not bufferHandler.visualStartX or not bufferHandler.visualStartY then
+        bufferHandler:updateStatusError("No selection to indent")
         return
     end
 
-    local startY = math.min(avim.cursorY, avim.visualStartY)
-    local endY = math.max(avim.cursorY, avim.visualStartY)
+    local startY = math.min(bufferHandler.cursorY, bufferHandler.visualStartY)
+    local endY = math.max(bufferHandler.cursorY, bufferHandler.visualStartY)
     
 
-    avim:saveToHistory()
+    bufferHandler:saveToHistory()
 
     for y = startY, endY do
-        avim.buffer[y] = "    " .. avim.buffer[y]
-        avim:markDirty(y)
+        bufferHandler.buffer[y] = "    " .. bufferHandler.buffer[y]
     end
 
     CommandHandler:execute("end_visual_mode")
-    avim:updateStatusBar("Indented visual selection")
+    bufferHandler:updateStatusBar("Indented visual selection")
 end)
 CommandHandler:map("uppercase_visual_selection", function()
-    if not avim.visualStartX or not avim.visualStartY then
-        avim:updateStatusError("No selection to convert")
+    if not bufferHandler.visualStartX or not bufferHandler.visualStartY then
+        bufferHandler:updateStatusError("No selection to convert")
         return
     end
 
-    local startY = math.min(avim.cursorY, avim.visualStartY)
-    local endY = math.max(avim.cursorY, avim.visualStartY)
+    local startY = math.min(bufferHandler.cursorY, bufferHandler.visualStartY)
+    local endY = math.max(bufferHandler.cursorY, bufferHandler.visualStartY)
 
-    avim:saveToHistory()
+    bufferHandler:saveToHistory()
 
     for y = startY, endY do
-        local line = avim.buffer[y]
+        local line = bufferHandler.buffer[y]
         if y == startY and y == endY then
-            avim.buffer[y] = line:sub(1, avim.visualStartX - 1) ..
-                            line:sub(avim.visualStartX, avim.cursorX - 1):upper() ..
-                            line:sub(avim.cursorX)
+            bufferHandler.buffer[y] = line:sub(1, bufferHandler.visualStartX - 1) ..
+                            line:sub(bufferHandler.visualStartX, bufferHandler.cursorX - 1):upper() ..
+                            line:sub(bufferHandler.cursorX)
         elseif y == startY then
-            avim.buffer[y] = line:sub(1, avim.visualStartX - 1) .. line:sub(avim.visualStartX):upper()
+            bufferHandler.buffer[y] = line:sub(1, bufferHandler.visualStartX - 1) .. line:sub(bufferHandler.visualStartX):upper()
         elseif y == endY then
-            avim.buffer[y] = line:sub(1, avim.cursorX - 1):upper() .. line:sub(avim.cursorX)
+            bufferHandler.buffer[y] = line:sub(1, bufferHandler.cursorX - 1):upper() .. line:sub(bufferHandler.cursorX)
         else
-            avim.buffer[y] = line:upper()
+            bufferHandler.buffer[y] = line:upper()
         end
-        avim:markDirty(y)
     end
 
     CommandHandler:execute("end_visual_mode")
-    avim:updateStatusBar("Uppercased visual selection")
+    bufferHandler:updateStatusBar("Uppercased visual selection")
 end)
 CommandHandler:map("lowercase_visual_selection", function()
-    if not avim.visualStartX or not avim.visualStartY then
-        avim:updateStatusError("No selection to convert")
+    if not bufferHandler.visualStartX or not bufferHandler.visualStartY then
+        bufferHandler:updateStatusError("No selection to convert")
         return
     end
 
-    local startY = math.min(avim.cursorY, avim.visualStartY)
-    local endY = math.max(avim.cursorY, avim.visualStartY)
+    local startY = math.min(bufferHandler.cursorY, bufferHandler.visualStartY)
+    local endY = math.max(bufferHandler.cursorY, bufferHandler.visualStartY)
 
-    avim:saveToHistory()
+    bufferHandler:saveToHistory()
 
     for y = startY, endY do
-        local line = avim.buffer[y]
+        local line = bufferHandler.buffer[y]
         if y == startY and y == endY then
-            avim.buffer[y] = line:sub(1, avim.visualStartX - 1) ..
-                            line:sub(avim.visualStartX, avim.cursorX - 1):lower() ..
-                            line:sub(avim.cursorX)
+            bufferHandler.buffer[y] = line:sub(1, bufferHandler.visualStartX - 1) ..
+                            line:sub(bufferHandler.visualStartX, bufferHandler.cursorX - 1):lower() ..
+                            line:sub(bufferHandler.cursorX)
         elseif y == startY then
-            avim.buffer[y] = line:sub(1, avim.visualStartX - 1) .. line:sub(avim.visualStartX):lower()
+            bufferHandler.buffer[y] = line:sub(1, bufferHandler.visualStartX - 1) .. line:sub(bufferHandler.visualStartX):lower()
         elseif y == endY then
-            avim.buffer[y] = line:sub(1, avim.cursorX - 1):lower() .. line:sub(avim.cursorX)
+            bufferHandler.buffer[y] = line:sub(1, bufferHandler.cursorX - 1):lower() .. line:sub(bufferHandler.cursorX)
         else
-            avim.buffer[y] = line:lower()
+            bufferHandler.buffer[y] = line:lower()
         end
-        avim:markDirty(y)
     end
 
     CommandHandler:execute("end_visual_mode")
-    avim:updateStatusBar("Lowercased visual selection")
+    bufferHandler:updateStatusBar("Lowercased visual selection")
 end)
 CommandHandler:map("join_visual_selection", function()
-    if not avim.visualStartX or not avim.visualStartY then
-        avim:updateStatusError("No selection to join")
+    if not bufferHandler.visualStartX or not bufferHandler.visualStartY then
+        bufferHandler:updateStatusError("No selection to join")
         return
     end
 
-    local startY = math.min(avim.cursorY, avim.visualStartY)
-    local endY = math.max(avim.cursorY, avim.visualStartY)
+    local startY = math.min(bufferHandler.cursorY, bufferHandler.visualStartY)
+    local endY = math.max(bufferHandler.cursorY, bufferHandler.visualStartY)
 
-    avim:saveToHistory()
+    bufferHandler:saveToHistory()
 
     local joinedLine = ""
     for y = startY, endY do
-        joinedLine = joinedLine .. avim.buffer[y]:gsub("%s+$", "")
-        avim.buffer[y] = ""
-        avim:markDirty(y)
+        joinedLine = joinedLine .. bufferHandler.buffer[y]:gsub("%s+$", "")
+        bufferHandler.buffer[y] = ""
     end
 
-    avim.buffer[startY] = joinedLine
-    avim.cursorY = startY
-    avim.cursorX = #joinedLine + 1
+    bufferHandler.buffer[startY] = joinedLine
+    bufferHandler.cursorY = startY
+    bufferHandler.cursorX = #joinedLine + 1
 
     -- Remove empty lines in the range after joining
     for y = startY + 1, endY do
-        table.remove(avim.buffer, startY + 1)
+        table.remove(bufferHandler.buffer, startY + 1)
     end
 
     CommandHandler:execute("end_visual_mode")
-    avim:updateStatusBar("Joined lines")
+    bufferHandler:updateStatusBar("Joined lines")
 end)
 CommandHandler:map("swap_case_visual_selection", function()
-    if not avim.visualStartX or not avim.visualStartY then
-        avim:updateStatusError("No selection to swap case")
+    if not bufferHandler.visualStartX or not bufferHandler.visualStartY then
+        bufferHandler:updateStatusError("No selection to swap case")
         return
     end
 
-    local startY = math.min(avim.cursorY, avim.visualStartY)
-    local endY = math.max(avim.cursorY, avim.visualStartY)
+    local startY = math.min(bufferHandler.cursorY, bufferHandler.visualStartY)
+    local endY = math.max(bufferHandler.cursorY, bufferHandler.visualStartY)
 
-    avim:saveToHistory()
+    bufferHandler:saveToHistory()
 
     for y = startY, endY do
-        local line = avim.buffer[y]
+        local line = bufferHandler.buffer[y]
         if y == startY and y == endY then
-            avim.buffer[y] = line:sub(1, avim.visualStartX - 1) ..
-                            line:sub(avim.visualStartX, avim.cursorX - 1):gsub(".", function(c)
+            bufferHandler.buffer[y] = line:sub(1, bufferHandler.visualStartX - 1) ..
+                            line:sub(bufferHandler.visualStartX, bufferHandler.cursorX - 1):gsub(".", function(c)
                                 return c:match("%l") and c:upper() or c:lower()
                             end) ..
-                            line:sub(avim.cursorX)
+                            line:sub(bufferHandler.cursorX)
         elseif y == startY then
-            avim.buffer[y] = line:sub(1, avim.visualStartX - 1) .. line:sub(avim.visualStartX):gsub(".", function(c)
+            bufferHandler.buffer[y] = line:sub(1, bufferHandler.visualStartX - 1) .. line:sub(bufferHandler.visualStartX):gsub(".", function(c)
                 return c:match("%l") and c:upper() or c:lower()
             end)
         elseif y == endY then
-            avim.buffer[y] = line:sub(1, avim.cursorX - 1):gsub(".", function(c)
+            bufferHandler.buffer[y] = line:sub(1, bufferHandler.cursorX - 1):gsub(".", function(c)
                 return c:match("%l") and c:upper() or c:lower()
-            end) .. line:sub(avim.cursorX)
+            end) .. line:sub(bufferHandler.cursorX)
         else
-            avim.buffer[y] = line:gsub(".", function(c)
+            bufferHandler.buffer[y] = line:gsub(".", function(c)
                 return c:match("%l") and c:upper() or c:lower()
             end)
         end
-        avim:markDirty(y)
     end
 
     CommandHandler:execute("end_visual_mode")
-    avim:updateStatusBar("Swapped case of visual selection")
+    bufferHandler:updateStatusBar("Swapped case of visual selection")
 end)
