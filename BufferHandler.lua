@@ -211,6 +211,7 @@ function BufferHandler:updateScroll()
     end
     if self.scrollOffset ~= oldScrollOffset or self.horizontalScrollOffset ~= oldHorizontalScrollOffset then
         self:refreshScreen()
+        View:drawScreen()
         return true -- Indicate that the scroll offset was updated
     end
 
@@ -262,6 +263,7 @@ function BufferHandler:insertChar(char)
     if self.cursorX > self.maxVisibleColumns then
         self:updateScroll()
     end
+    self:refreshScreen()
     getView():drawScreen()
     self:updateStatusBar("Inserted character")
 end

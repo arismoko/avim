@@ -54,7 +54,6 @@ local function loadPlugin(pluginName)
     end
 end
 
-
 -- Function to load all enabled plugins
 local function loadPlugins()
     for _, plugin in ipairs(plugins) do
@@ -197,11 +196,21 @@ local function handleMainMenu()
         end
     end
 end
+
 -- Load core components and plugins
 require("keybinds")
 require("commands")
 loadPluginConfig()
 loadPlugins()
 
--- Launch the main program with the main menu
-handleMainMenu()
+-- Check if a filename was passed as an argument
+local args = { ... }
+if args[1] then
+    -- Argument provided, load the file and skip the main menu
+    bufferHandler.filename = args[1]
+    bufferHandler:loadFile(bufferHandler.filename)
+    eventLoop()
+else
+    -- No argument, show the main menu
+    handleMainMenu()
+end

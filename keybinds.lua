@@ -253,19 +253,19 @@ KeyHandler:map("i", "f1", function()
 end, "Exit to Normal Mode")
 
 KeyHandler:map("i", "left", function()
-    CommandHandler:execute("insert_arrow_left")
+    CommandHandler:execute("move_left")
 end, "Move Left")
 
 KeyHandler:map("i", "right", function()
-    CommandHandler:execute("insert_arrow_right")
+    CommandHandler:execute("move_right")
 end, "Move Right")
 
 KeyHandler:map("i", "up", function()
-    CommandHandler:execute("insert_arrow_up")
+    CommandHandler:execute("move_up")
 end, "Move Up")
 
 KeyHandler:map("i", "down", function()
-    CommandHandler:execute("insert_arrow_down")
+    CommandHandler:execute("move_down")
 end, "Move Down")
 
 KeyHandler:map("i", "tab", function()

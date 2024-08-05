@@ -480,49 +480,41 @@ end)
 CommandHandler:map("insert_backspace", function()
     -- Perform the backspace action
     bufferHandler:backspace()
-    View:drawScreen()
 end)
 
 CommandHandler:map("insert_exit_to_normal", function()
     bufferHandler:switchMode("normal")
-    View:drawScreen()
 end)
 
 CommandHandler:map("insert_arrow_up", function()
     -- Normal cursor up movement
     bufferHandler:moveCursorUp()
-    View:drawScreen()
 end)
 
 CommandHandler:map("insert_arrow_down", function()
     -- Normal cursor down movement
     bufferHandler:moveCursorDown()
-    View:drawScreen()
 end)
 
 CommandHandler:map("insert_arrow_left", function()
     -- Normal cursor left movement
     bufferHandler:moveCursorLeft()
-    View:drawScreen()
 end)
 
 CommandHandler:map("insert_arrow_right", function()
     -- Normal cursor right movement
     bufferHandler:moveCursorRight()
-    View:drawScreen()
 end)
 
 CommandHandler:map("insert_tab", function()
     -- Insert a tab character
     bufferHandler:insertChar("    ")
     View:drawLine(bufferHandler.cursorY - bufferHandler.scrollOffset)
-    View:drawScreen()
 end)
 
 CommandHandler:map("insert_enter", function()
     -- Insert a new line
     bufferHandler:enter()
-    View:drawScreen()
 end)
 
 -- === Change Line ===

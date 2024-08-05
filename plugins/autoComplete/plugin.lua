@@ -2,6 +2,7 @@ local function init(components)
     local View = components.View
     local bufferHandler = components.bufferHandler
     local KeyHandler = components.KeyHandler
+    local CommandHandler = components.CommandHandler
     -- Store the original handleCharInput function
     local originalHandleCharInput = KeyHandler.handleCharInput
 
@@ -23,6 +24,7 @@ local function init(components)
             model:resetAutocomplete()
         end
     end
+
     -- Helper function to get a nested value from a table
     local function getNestedValue(tbl, keys)
         local value = tbl
@@ -46,9 +48,13 @@ local function init(components)
     -- Function to show the autocomplete window
     function View:showAutocompleteWindow(suggestions)
         local x = bufferHandler.cursorX
-        local y = bufferHandler.cursorY - bufferHandler.scrollOffset + 1
+        local y = bufferHandler.cursorY - bufferHandler.scrollOffset + 1 
 
-        local width = math.max(10, #suggestions[1] + 2)
+        if y > SCREENHEIGHT / 2 then
+            y = y - 6 
+        end
+
+        local width = math.max(10, #suggestions[1] + 5)
         local height = math.min(#suggestions, 5)
 
         if #suggestions > 5 then
@@ -107,23 +113,16 @@ local function init(components)
                     end
                 end
             else
+                -- Use textutils.complete for suggestions
+                local dynamicSuggestions = textutils.complete(prefix, _G)
+                for _, suggestion in ipairs(dynamicSuggestions) do
+                    table.insert(suggestions, suggestion)
+                end
+    
+                -- Add hardcoded keywords
                 for _, keyword in ipairs(autocompleteKeywords) do
                     if keyword:sub(1, #prefix) == prefix then
                         table.insert(suggestions, keyword)
-                    end
-                end
-    
-                for name, value in pairs(_G) do
-                    if type(name) == "string" and name:sub(1, #prefix) == prefix then
-                        table.insert(suggestions, name)
-                    end
-    
-                    if type(value) == "table" then
-                        for key in pairs(value) do
-                            if type(key) == "string" and key:sub(1, #prefix) == prefix then
-                                table.insert(suggestions, name .. "." .. key)
-                            end
-                        end
                     end
                 end
             end
@@ -139,21 +138,31 @@ local function init(components)
             self.autocompleteWindow:close()
             self.autocompleteWindow = nil
             self.suggestions = nil
+            require("View"):drawScreen()
         end
     end
 
-    -- Function to handle inserting the selected suggestion
-    function bufferHandler:acceptAutocompleteSuggestion()
-        local selectedSuggestion = self.suggestions and self.suggestions[1]
-        if selectedSuggestion then
-            local currentWord = self:getWordAtCursor()
-            local suffix = selectedSuggestion:sub(#currentWord + 1)
-            self:insertChar(suffix)
-            self.cursorX = #self.buffer[self.cursorY] + 1
-            self:resetAutocomplete()
-            View:drawScreen()
-        end
+-- Function to handle inserting the selected suggestion
+function bufferHandler:acceptAutocompleteSuggestion()
+    local selectedSuggestion = self.suggestions and self.suggestions[1]
+    if selectedSuggestion then
+        local currentWord = self:getWordAtCursor()
+        
+        -- Clean up the suggestion if necessary
+        local cleanedSuggestion = selectedSuggestion:gsub("^"..currentWord, "")
+        
+        -- Insert the cleaned suggestion suffix
+        self:insertChar(cleanedSuggestion)
+        
+        -- Move the cursor to the end of the inserted word
+        self.cursorX = self.cursorX + #cleanedSuggestion
+        
+        -- Reset the autocomplete
+        self:resetAutocomplete()
+        View:drawScreen()
     end
+end
+
 
     -- Map keybindings related to autocomplete
     KeyHandler:map("i", "backspace", function()
@@ -182,13 +191,12 @@ local function init(components)
             View:drawScreen()
         end
     end, "Autocomplete or insert new line")
-
     KeyHandler:map("i", "arrow_up", function()
         if bufferHandler.suggestions then
             table.insert(bufferHandler.suggestions, 1, table.remove(bufferHandler.suggestions))
             View:showAutocompleteWindow(bufferHandler.suggestions)
         else
-            bufferHandler:moveCursorUp()
+            CommandHandler:execute("move_up")
             bufferHandler:markDirty(bufferHandler.cursorY)
         end
         View:drawScreen()
@@ -199,7 +207,7 @@ local function init(components)
             table.insert(bufferHandler.suggestions, table.remove(bufferHandler.suggestions, 1))
             View:showAutocompleteWindow(bufferHandler.suggestions)
         else
-            bufferHandler:moveCursorDown()
+            CommandHandler:execute("move_down")
             bufferHandler:markDirty(bufferHandler.cursorY)
         end
         View:drawScreen()
@@ -207,7 +215,7 @@ local function init(components)
 
     KeyHandler:map("i", "arrow_left", function()
         bufferHandler:resetAutocomplete()
-        bufferHandler:moveCursorLeft()
+        CommandHandler:execute("move_left")
         bufferHandler:markDirty(bufferHandler.cursorY)
         View:drawScreen()
     end, "Cancel autocomplete and move cursor left")
@@ -216,7 +224,7 @@ local function init(components)
         if bufferHandler.suggestions then
             bufferHandler:acceptAutocompleteSuggestion()
         else
-            bufferHandler:moveCursorRight()
+            CommandHandler:execute("move_right")
             bufferHandler:markDirty(bufferHandler.cursorY)
             View:drawScreen()
         end

@@ -207,7 +207,6 @@ function KeyHandler:map(modes, keyCombos, callback, description)
     end
 end
 
-
 function KeyHandler:handleKeyPress(key, isDown, model, view, commandHandler)
     local keyName = keys.getName(key)
 
@@ -220,10 +219,11 @@ function KeyHandler:handleKeyPress(key, isDown, model, view, commandHandler)
             return
         end
 
+        -- Handle modifier keys (shift, ctrl, alt)
         if self.modifierKeys[key] then
             local modifier = self.modifierKeys[key]
 
-            -- Ignore shift in insert mode (redundant with the above, but keeping as reference)
+            -- Ignore shift in insert mode
             if model.mode == "insert" and modifier == "shift" then
                 return
             end
@@ -237,7 +237,6 @@ function KeyHandler:handleKeyPress(key, isDown, model, view, commandHandler)
                 self.currentModifierHeld = ""
                 model:updateStatusBar(modifier:sub(1, 1):upper() .. modifier:sub(2) .. " released with no subkey found")
             end
-
             return
         end
 
@@ -257,15 +256,27 @@ function KeyHandler:handleKeyPress(key, isDown, model, view, commandHandler)
                 currentMap = currentMap[self.currentModifierHeld] or {}
             end
 
-            -- Traverse the key sequence map
+            -- Traverse the key sequence map and check if it is valid
+            local isValidSequence = true
             for _, key in ipairs(self.currentKeySequence) do
-                currentMap = currentMap[key] or {}
+                if not currentMap[key] then
+                    isValidSequence = false
+                    break
+                end
+                currentMap = currentMap[key]
+            end
+
+            -- If the sequence is invalid, reset and notify the user
+            if not isValidSequence then
+                model:updateStatusBar("Invalid key sequence: " .. table.concat(self.currentKeySequence, " + ") .. ", resetting...")
+                self:resetKeySequence()
+                return
             end
 
             -- Check if currentMap has a valid callback (indicating a complete keybinding)
             if currentMap.callback and not currentMap.keyUpEvent then
                 currentMap.callback()
-                self.currentKeySequence = {} -- Reset sequence
+                self:resetKeySequence()
                 if self.leaderTimeoutTimer then
                     os.cancelTimer(self.leaderTimeoutTimer) -- Cancel any pending timer
                     self.leaderTimeoutTimer = nil -- Reset the timer reference
@@ -295,7 +306,7 @@ function KeyHandler:handleKeyPress(key, isDown, model, view, commandHandler)
 
             if currentMap.callback and currentMap.keyUpEvent then
                 currentMap.callback()
-                self.currentKeySequence = {} -- Reset sequence
+                self:resetKeySequence()
                 if self.leaderTimeoutTimer then
                     os.cancelTimer(self.leaderTimeoutTimer) -- Cancel any pending timer
                     self.leaderTimeoutTimer = nil -- Reset the timer reference
