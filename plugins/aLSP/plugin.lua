@@ -3,8 +3,16 @@ local function init(components)
     local KeyHandler = components.KeyHandler
     local viewInstance = components.View
 
-   
-    local errorFile = "tmp/luafmt_errors.txt"
+    -- Save the current working directory
+    local originalDir = shell.dir()
+
+    -- Get the directory of the currently running script
+    local scriptPath = fs.getDir(shell.getRunningProgram())
+    shell.setDir(scriptPath)
+
+    -- Resolve paths based on the script's directory
+    local errorFile = fs.combine(scriptPath, "tmp/luafmt_errors.txt")
+    local formatterScript = fs.combine(scriptPath, "plugins/aLSP/luafmt.lua")
 
     -- Function to check if the error file exists and return its content
     local function getErrorContent()
@@ -23,7 +31,7 @@ local function init(components)
         bufferHandler:saveFile()
         local file = bufferHandler.filename
         -- Copy the file to tmp/ to avoid overwriting the original file
-        local tempFile = "tmp/" .. fs.getName(file)
+        local tempFile = fs.combine(scriptPath, "tmp/" .. fs.getName(file))
         
         -- Remove any previous error file
         if fs.exists(errorFile) then
@@ -41,7 +49,6 @@ local function init(components)
         end
 
         -- Construct the command to run the formatter
-        local formatterScript = "plugins/aLSP/luafmt.lua"
         local command = " --f " .. tempFile .. " 40"
 
         -- Use xpcall to run the formatter script and handle errors
@@ -86,6 +93,9 @@ local function init(components)
         -- Clean up the temporary file regardless of success or failure
         fs.delete(tempFile)
     end
+
+    -- Restore the original working directory
+    shell.setDir(originalDir)
 
     -- Map the formatting function to a keybinding
     KeyHandler:map("n", "leader + f", function()
