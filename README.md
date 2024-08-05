@@ -24,6 +24,7 @@ mv _avim-files/avim avim
 avim
 
 or
+
 (Recommended Install)
 pastebin get ZsJWP7fr install_avim
 install_avim
