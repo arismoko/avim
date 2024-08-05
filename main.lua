@@ -152,7 +152,6 @@ local function eventLoop()
         KeyHandler:handleInputEvent(bufferHandler.mode, bufferHandler, View, CommandHandler)
         View:drawScreen()
         View:updateCursor()
-
     end
     term.clear()
     term.setCursorPos(1, 1)
@@ -178,6 +177,7 @@ local function handleMainMenu()
                 bufferHandler.filename = filename
                 bufferHandler:loadFile(bufferHandler.filename)
                 eventLoop()
+                if bufferHandler.shouldExit then return end  -- Exit if set
             end
         elseif key == keys.two then
             local filename = handleFileOperation("Enter filename:")
@@ -185,16 +185,18 @@ local function handleMainMenu()
                 bufferHandler.filename = filename
                 bufferHandler:loadFile(bufferHandler.filename)
                 eventLoop()
+                if bufferHandler.shouldExit then return end  -- Exit if set
             end
         elseif key == keys.three then
             managePlugins()
         elseif key == keys.four then
             bufferHandler.shouldExit = true
+            term.clear()
+            term.setCursorPos(1, 1)
             return
         end
     end
 end
-
 -- Load core components and plugins
 require("keybinds")
 require("commands")

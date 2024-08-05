@@ -1,0 +1,5 @@
+-- /avim
+local args = { ... }
+local file = args[1] or ""
+shell.run("/avim-files/main", file)
+
