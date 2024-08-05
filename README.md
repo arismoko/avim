@@ -14,11 +14,20 @@
 
 ### Installation
 
-1. **Download AVIM**: Place the AVIM files into your ComputerCraft/CC:Tweaked computer using a git script like this one (not made by me):
+1. **Download AVIM**: Use one of the following methods to install avim the intended way:
 ```bash
+(Manual Install)
 wget https://gist.githubusercontent.com/SquidDev/e0f82765bfdefd48b0b15a5c06c0603b/raw/clone.min.lua
 git/clone.min https://github.com/arismoko/avim.git
-avim/main
+mv avim _avim-files
+mv _avim-files/avim avim
+avim
+
+or
+(Recommended Install)
+pastebin get ZsJWP7fr install_avim
+install_avim
+avim
 ```
 2. **Load Plugins**: Customize the plugins by editing the `plugins/pluginConfig.lua` file.
 
