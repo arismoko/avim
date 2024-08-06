@@ -92,7 +92,6 @@ function View:createWindow(x, y, width, height, backgroundColor, textColor)
         local view = View:getInstance()
 
         view.activeWindow = nil
-        Model:refreshScreen()
         view:drawScreen()
     end
 
@@ -159,7 +158,6 @@ function View:closeAllWindows()
     end
     self.windows = {}
     self.activeWindow = nil
-    Model:refreshScreen()
 end
 
 function View:showPopup(message)

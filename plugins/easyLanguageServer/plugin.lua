@@ -310,7 +310,6 @@ end
             local view = View:getInstance()
 
             view.activeWindow = nil
-            bufferHandler:refreshScreen()
             view:drawScreen()
         end
 
@@ -409,21 +408,18 @@ end
             bufferHandler:saveFile()
             bufferHandler.checkCurrentFileForErrors()
             bufferHandler:updateStatusBar("Checked for errors!")
-            bufferHandler:refreshScreen()
             viewInstance:drawScreen()
         end
     end)
     inputHandler:map({"normal", "visual"}, {"h"}, "move_left", function()
         bufferHandler:markDirty(bufferHandler.cursorY)  
         bufferHandler.cursorX = math.max(1, bufferHandler.cursorX - 1)
-        bufferHandler:refreshScreen()  
         bufferHandler.checkLineForErrors()
     end, "Move Left")
     
     inputHandler:map({"normal", "visual"}, {"l"}, "move_right", function()
         bufferHandler:markDirty(bufferHandler.cursorY)  
         bufferHandler.cursorX = math.min(#bufferHandler.buffer[bufferHandler.cursorY] + 1, bufferHandler.cursorX + 1)
-        bufferHandler:refreshScreen()  
         bufferHandler.checkLineForErrors()
     end, "Move Right")
     
@@ -433,7 +429,6 @@ end
             bufferHandler.cursorY = bufferHandler.cursorY - 1
         end
         bufferHandler.cursorX = math.min(bufferHandler.cursorX, #bufferHandler.buffer[bufferHandler.cursorY] + 1)
-        bufferHandler:refreshScreen()  
         bufferHandler.checkLineForErrors()
     end, "Move Up")
     
@@ -443,7 +438,6 @@ end
             bufferHandler.cursorY = bufferHandler.cursorY + 1
         end
         bufferHandler.cursorX = math.min(bufferHandler.cursorX, #bufferHandler.buffer[bufferHandler.cursorY] + 1)
-        bufferHandler:refreshScreen()  
         bufferHandler.checkLineForErrors()
     end, "Move Down")
 
