@@ -941,48 +941,60 @@ InputHandler:map({"visual"}, {"d"}, "cut_visual_selection", function()
     InputHandler:executeCommand("end_visual_mode")
 end, "Cut Visual Selection and Exit Visual Mode")
 
-InputHandler:map({"visual","normal"}, {"<"}, "unindent", function()
+InputHandler:map({"visual", "normal"}, {"<"}, "unindent", function()
     local function unindentLine(line)
         return line:sub(1, 1) == " " and line:sub(2) or line
     end
 
     bufferHandler:saveToHistory()
 
-    bufferHandler.cursorX = 1
-    local line = bufferHandler.buffer[bufferHandler.cursorY]
-    if line:match("^%s") then
-        bufferHandler.buffer[bufferHandler.cursorY] = unindentLine(line)
-        moveToFirstNonBlank(bufferHandler, bufferHandler.cursorY)
-        View:drawLine(bufferHandler.cursorY - bufferHandler.scrollOffset)
+    if bufferHandler.isVisualMode then
+        local startX, startY, endX, endY = getSelectionRange(bufferHandler)
+        for i = startY, endY do
+            bufferHandler.buffer[i] = unindentLine(bufferHandler.buffer[i])
+            View:drawLine(i - bufferHandler.scrollOffset)
+        end
+        bufferHandler:updateStatusBar("Unindented selection")
+    else
+        bufferHandler.cursorX = 1
+        local line = bufferHandler.buffer[bufferHandler.cursorY]
+        if line:match("^%s") then
+            bufferHandler.buffer[bufferHandler.cursorY] = unindentLine(line)
+            moveToFirstNonBlank(bufferHandler, bufferHandler.cursorY)
+            View:drawLine(bufferHandler.cursorY - bufferHandler.scrollOffset)
+        end
+        bufferHandler:updateStatusBar("Unindented line")
     end
 
-    if bufferHandler.cursorY < #bufferHandler.buffer then
-        bufferHandler.cursorY = bufferHandler.cursorY + 1
-    end
-
-    bufferHandler:updateStatusBar("Unindented line(s)")
     bufferHandler:refreshScreen()
-end, "Unindent Visual Selection or line")
+end, "Unindent visual selection or line")
 
-InputHandler:map({"visual","normal"}, {">"}, "indent", function()
+
+InputHandler:map({"visual", "normal"}, {">"}, "indent", function()
     local function indentLine(line)
         return " " .. line
     end
 
     bufferHandler:saveToHistory()
 
-    bufferHandler.cursorX = 1
-    bufferHandler.buffer[bufferHandler.cursorY] = indentLine(bufferHandler.buffer[bufferHandler.cursorY])
-    moveToFirstNonBlank(bufferHandler, bufferHandler.cursorY)
-    View:drawLine(bufferHandler.cursorY - bufferHandler.scrollOffset)
-
-    if bufferHandler.cursorY < #bufferHandler.buffer then
-        bufferHandler.cursorY = bufferHandler.cursorY + 1
+    if bufferHandler.isVisualMode then
+        local startX, startY, endX, endY = getSelectionRange(bufferHandler)
+        for i = startY, endY do
+            bufferHandler.buffer[i] = indentLine(bufferHandler.buffer[i])
+            View:drawLine(i - bufferHandler.scrollOffset)
+        end
+        bufferHandler:updateStatusBar("Indented selection")
+    else
+        bufferHandler.cursorX = 1
+        bufferHandler.buffer[bufferHandler.cursorY] = indentLine(bufferHandler.buffer[bufferHandler.cursorY])
+        moveToFirstNonBlank(bufferHandler, bufferHandler.cursorY)
+        View:drawLine(bufferHandler.cursorY - bufferHandler.scrollOffset)
+        bufferHandler:updateStatusBar("Indented line")
     end
 
-    bufferHandler:updateStatusBar("Indented line(s)")
     bufferHandler:refreshScreen()
-end, "Indent Visual Selection or Line")
+end, "Indent visual selection or line")
+
 
 InputHandler:map({"visual"}, {"U"}, "uppercase_visual_selection", function()
     transformVisualSelection(bufferHandler, string.upper)

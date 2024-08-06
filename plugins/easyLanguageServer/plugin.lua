@@ -179,34 +179,64 @@ local function init(components)
         end
     end
 end
-    -- Updated drawLine function with correct error highlighting
-    function viewInstance:drawLine(y)
-        local lineIndex = bufferHandler.scrollOffset + y
-        local lineContent = bufferHandler:getLine(lineIndex)
+function viewInstance:drawLine(y)
+    local lineIndex = bufferHandler.scrollOffset + y
+    local lineContent = bufferHandler:getLine(lineIndex)
     
-        term.setCursorPos(1, y)
-        term.clearLine()
+    term.setCursorPos(1, y)
+    term.clearLine()
     
-        if lineContent then
-            local lineNumberWidth = self:getLineNumberWidth()
-            local lineNumber = tostring(lineIndex)
-            lineNumber = string.rep(" ", lineNumberWidth - #lineNumber) .. lineNumber
-    
-            term.setTextColor(colors.lightGray)
-            term.write(lineNumber .. " ")
-    
-            -- Use the helper function to check if the current line has an error
-            if lineHasError(lineIndex) then
-                -- Highlight the entire line in red if there's an error
-                term.setTextColor(colorMatch.error)
-                term.write(lineContent)
+    if lineContent then
+        local lineNumberWidth = self:getLineNumberWidth()
+        local lineNumber = tostring(lineIndex)
+        lineNumber = string.rep(" ", lineNumberWidth - #lineNumber) .. lineNumber
+
+        term.setTextColor(colors.lightGray)
+        term.write(lineNumber .. " ")
+
+        -- Check if the line has an error
+        if lineHasError(lineIndex) then
+            -- Highlight the entire line in red if there's an error
+            term.setTextColor(colorMatch.error)
+            term.write(lineContent)
+        else
+            -- Handle visual mode highlighting
+            local visualStartY = math.min(bufferHandler.visualStartY or bufferHandler.cursorY, bufferHandler.cursorY)
+            local visualEndY = math.max(bufferHandler.visualStartY or bufferHandler.cursorY, bufferHandler.cursorY)
+
+            if bufferHandler.isVisualMode and lineIndex >= visualStartY and lineIndex <= visualEndY then
+                local startX = 1
+                local endX = #lineContent
+
+                if lineIndex == bufferHandler.visualStartY then startX = bufferHandler.visualStartX end
+                if lineIndex == bufferHandler.cursorY then endX = bufferHandler.cursorX end
+
+                if startX > endX then
+                    startX, endX = endX, startX
+                end
+
+                local beforeHighlight = lineContent:sub(1, startX - 1)
+                local highlightText = lineContent:sub(startX, endX)
+                local afterHighlight = lineContent:sub(endX + 1)
+
+                -- Apply normal syntax highlighting to the part before the visual selection
+                highlightLine(beforeHighlight)
+
+                -- Highlight the selected portion with a different background color
+                term.setBackgroundColor(colors.gray)
+                highlightLine(highlightText)
+                term.setBackgroundColor(colors.black)
+
+                -- Apply normal syntax highlighting to the part after the visual selection
+                highlightLine(afterHighlight)
             else
-                -- Otherwise, apply normal syntax highlighting
+                -- If not in visual mode or the line is not part of the visual selection, apply normal syntax highlighting
                 highlightLine(lineContent)
             end
         end
     end
-    
+end
+  
 
     -- Overwrite the createWindow function to apply custom colors
     function viewInstance:createWindow(x, y, width, height, backgroundColor, textColor)
