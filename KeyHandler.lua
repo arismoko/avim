@@ -90,7 +90,29 @@ local specialCharacterMap = {
     ["M"] = "shift + m",
     ["<"] = "shift + comma",
     [">"] = "shift + period",
-    ["?"] = "shift + slash"
+    ["?"] = "shift + slash",
+    ["/"] = "slash",
+    ["."] = "period",
+    [","] = "comma",
+    [";"] = "semicolon",
+    ["'"] = "apostrophe",
+    ["["] = "leftBracket",
+    ["]"] = "rightBracket",
+    ["\\"] = "backslash",
+    [""] = "backtick",
+    ["~"] = "shift + backtick",
+    ["1"] = "one",
+    ["2"] = "two",
+    ["3"] = "three",
+    ["4"] = "four",
+    ["5"] = "five",
+    ["6"] = "six",
+    ["7"] = "seven",
+    ["8"] = "eight",
+    ["9"] = "nine",
+    ["0"] = "zero",
+    ["-"] = "minus",
+    ["="] = "equals",
 }
 
 -- Modify the parseKeyCombo function
@@ -234,13 +256,27 @@ function KeyHandler:handleKeyPress(key, isDown, model, view, commandHandler)
                 self.currentModifierHeld = modifier
                 model:updateStatusBar(modifier:sub(1, 1):upper() .. modifier:sub(2) .. " held, waiting for inputs")
             else
-                self.currentModifierHeld = ""
-                model:updateStatusBar(modifier:sub(1, 1):upper() .. modifier:sub(2) .. " released with no subkey found")
+                -- Only reset currentModifierHeld if this modifier is released
+                if self.currentModifierHeld == modifier then
+                    self.currentModifierHeld = ""
+                    model:updateStatusBar(modifier:sub(1, 1):upper() .. modifier:sub(2) .. " released with no subkey found")
+                end
             end
             return
         end
 
         if isDown then
+            -- Handle numeric prefixes
+            if tonumber(keyName) then
+                if self.numericPrefix then
+                    self.numericPrefix = self.numericPrefix .. keyName
+                else
+                    self.numericPrefix = keyName
+                end
+                model:updateStatusBar("Prefix: " .. self.numericPrefix)
+                return
+            end
+
             table.insert(self.currentKeySequence, keyName)
 
             -- Handle leader key sequences
@@ -259,7 +295,7 @@ function KeyHandler:handleKeyPress(key, isDown, model, view, commandHandler)
             -- Traverse the key sequence map and check if it is valid
             local isValidSequence = true
             for _, key in ipairs(self.currentKeySequence) do
-                if not currentMap[key] then
+                if not currentMap[key] and not tonumber(key) then
                     isValidSequence = false
                     break
                 end
@@ -275,7 +311,8 @@ function KeyHandler:handleKeyPress(key, isDown, model, view, commandHandler)
 
             -- Check if currentMap has a valid callback (indicating a complete keybinding)
             if currentMap.callback and not currentMap.keyUpEvent then
-                currentMap.callback()
+                local prefix = tonumber(self.numericPrefix) or 1
+                currentMap.callback(prefix)
                 self:resetKeySequence()
                 if self.leaderTimeoutTimer then
                     os.cancelTimer(self.leaderTimeoutTimer) -- Cancel any pending timer
@@ -305,7 +342,8 @@ function KeyHandler:handleKeyPress(key, isDown, model, view, commandHandler)
             end
 
             if currentMap.callback and currentMap.keyUpEvent then
-                currentMap.callback()
+                local prefix = tonumber(self.numericPrefix) or 1
+                currentMap.callback(prefix)
                 self:resetKeySequence()
                 if self.leaderTimeoutTimer then
                     os.cancelTimer(self.leaderTimeoutTimer) -- Cancel any pending timer
@@ -315,6 +353,7 @@ function KeyHandler:handleKeyPress(key, isDown, model, view, commandHandler)
         end
     end
 end
+
 
 -- Handle different types of input events
 function KeyHandler:handleInputEvent(mode, model, view, commandHandler)
@@ -391,7 +430,6 @@ end
 
 function KeyHandler:resetKeySequence()
     self.currentKeySequence = {}
-    self.currentModifierHeld = ""
     self.isKeySequence = false
     if self.leaderTimeoutTimer then
         os.cancelTimer(self.leaderTimeoutTimer)

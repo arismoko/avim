@@ -397,9 +397,14 @@ function View:drawLine(y)
             lineToDisplay = lineToDisplay:sub(Model.horizontalScrollOffset + 1, Model.horizontalScrollOffset + Model.maxVisibleColumns)
         end
 
-        if Model.isVisualMode and Model.visualStartY and lineIndex >= math.min(Model.visualStartY, Model.cursorY) and lineIndex <= math.max(Model.visualStartY, Model.cursorY) then
+        -- Adjusted logic to account for scrolling
+        local visualStartY = math.min(Model.visualStartY or Model.cursorY, Model.cursorY)
+        local visualEndY = math.max(Model.visualStartY or Model.cursorY, Model.cursorY)
+
+        if Model.isVisualMode and lineIndex >= visualStartY and lineIndex <= visualEndY then
             local startX = 1
             local endX = #lineToDisplay
+
             if lineIndex == Model.visualStartY then startX = Model.visualStartX end
             if lineIndex == Model.cursorY then endX = Model.cursorX end
 

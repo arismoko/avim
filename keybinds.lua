@@ -21,12 +21,28 @@ KeyHandler:map({"n", "v"}, "l", function()
     CommandHandler:execute("move_right")
 end, "Move Right")
 
+KeyHandler:map({"n", "v"}, "ctrl + b", function()
+    CommandHandler:execute("page_up")
+end, "Move Page Back")
+
+KeyHandler:map({"n", "v"}, "ctrl + f", function()
+    CommandHandler:execute("page_down")
+end, "Move Page Forward")
+
+KeyHandler:map({"n", "v"}, "ctrl + u", function()
+    CommandHandler:execute("half_page_up")
+end, "Move Half Page Up")
+
+KeyHandler:map({"n", "v"}, "ctrl + d", function()
+    CommandHandler:execute("half_page_down")
+end, "Move Half Page Down")
+
 -- Cursor movement within the line
 KeyHandler:map({"n", "v"}, "0", function()
     CommandHandler:execute("move_to_line_start")
 end, "Move to Start of Line")
 
-KeyHandler:map({"n", "v"}, "^", function()
+KeyHandler:map({"n", "v"}, "shift + six", function()
     CommandHandler:execute("move_to_first_non_blank")
 end, "Move to First Non-Blank Character")
 
@@ -56,23 +72,15 @@ KeyHandler:map({"n", "v"}, "}", function()
     CommandHandler:execute("move_paragraph_forward")
 end, "Move to Next Paragraph")
 
--- Searching within the line
-KeyHandler:map({"n", "v"}, "f", function()
-    CommandHandler:execute("find_character")
-end, "Find Character in Line")
-
 KeyHandler:map({"n", "v"}, "t", function()
     CommandHandler:execute("find_before_character")
 end, "Find Before Character in Line")
 
 -- Repeating last character search
 KeyHandler:map({"n", "v"}, "n", function()
-    CommandHandler:execute("repeat_last_find")
+    CommandHandler:execute("repeat_last_search_or_replace")
 end, "Repeat Last Find")
 
-KeyHandler:map({"n", "v"}, ",", function()
-    CommandHandler:execute("repeat_last_find_reverse")
-end, "Repeat Last Find in Reverse")
 
 -- File and Screen Navigation
 KeyHandler:map({"n", "v"}, "g + g", function()
@@ -149,6 +157,10 @@ KeyHandler:map("n", "a^", function()
     CommandHandler:execute("append_to_line")
 end, "Append to Line on Key Release")
 
+KeyHandler:map("n", "shift + a^", function()
+    CommandHandler:execute("append_to_line_end")
+end, "Append to Line End")
+
 KeyHandler:map("n", "I^", function()
     CommandHandler:execute("insert_at_line_start")
 end, "Insert at Line Start on Key Release")
@@ -157,10 +169,20 @@ KeyHandler:map("n", "o^", function()
     CommandHandler:execute("open_line_below")
 end, "Open Line Below on Key Release")
 
-KeyHandler:map("n", "O^", function()
+KeyHandler:map("n", "shift + o^", function()
     CommandHandler:execute("open_line_above")
 end, "Open Line Above on Key Release")
 
+KeyHandler:map("n", "s^", function()
+    CommandHandler:execute("delete_char_and_insert")
+end, "Substitute Char")
+
+KeyHandler:map("n", "shift + s^", function()
+    CommandHandler:execute("delete_line_and_insert")
+end, "Substitute Line")
+KeyHandler:map("n", "shift + c^", function()
+    CommandHandler:execute("delete_until_end_of_line_and_insert")
+end, "Change to Line End")
 KeyHandler:map("n", {":","shift+semiColon"}, function()
     CommandHandler:execute("enter_command_mode")
 end, "Enter Command Mode")
@@ -172,6 +194,10 @@ end, "Enter Visual Mode")
 KeyHandler:map("n", "f9", function()
     CommandHandler:execute("exit_editor")
 end, "Exit Editor")
+
+KeyHandler:map("n", "ctrl + g", function()
+    bufferHandler:switchMode("command", "goto_line ")
+end, "Save File")
 
 -- Search and Replace
 KeyHandler:map("n", "/", function()
@@ -186,7 +212,7 @@ KeyHandler:map("n", "ctrl + /", function()
     bufferHandler:switchMode("command", "replace_all ")
 end, "Replace All")
 
-KeyHandler:map("n", "ctrl + n", function()
+KeyHandler:map("n", ".", function()
     bufferHandler:switchMode("command", nil, true)
 end, "Execute previous command")
 
@@ -198,7 +224,7 @@ KeyHandler:map("v", "y", function()
     CommandHandler:execute("end_visual_mode")
 end, "Yank Visual Selection and End Visual Mode")
 
-KeyHandler:map("v", "d", function()
+KeyHandler:map("v", "x", function()
     CommandHandler:execute("delete_visual_selection")
     CommandHandler:execute("end_visual_mode")
 end, "Delete Visual Selection and End Visual Mode")
@@ -208,17 +234,17 @@ KeyHandler:map("v", "c", function()
     CommandHandler:execute("end_visual_mode")
 end, "Change Visual Selection and End Visual Mode")
 
-KeyHandler:map("v", "x", function()
+KeyHandler:map("v", "d", function()
     CommandHandler:execute("cut_visual_selection")
     CommandHandler:execute("end_visual_mode")
 end, "Cut Visual Selection and End Visual Mode")
 
-KeyHandler:map("v", "<", function()
-    CommandHandler:execute("unindent_visual_selection")
+KeyHandler:map({"n","v"}, "<", function()
+    CommandHandler:execute("unindent")
 end, "Unindent Visual Selection")
 
-KeyHandler:map("v", ">", function()
-    CommandHandler:execute("indent_visual_selection")
+KeyHandler:map({"n","v"}, ">", function()
+    CommandHandler:execute("indent")
 end, "Indent Visual Selection")
 
 KeyHandler:map("v", "U", function()

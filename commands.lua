@@ -2,28 +2,193 @@
 local CommandHandler = require("CommandHandler"):getInstance()
 local bufferHandler = require("BufferHandler"):getInstance()
 local View = require("View"):getInstance()
+--=== HELPER FUNCTIONS ===
+local function scrollPage(bufferHandler, linesToScroll)
+    -- Calculate the new scroll offset
+    bufferHandler.scrollOffset = math.max(0, math.min(bufferHandler.scrollOffset + linesToScroll, #bufferHandler.buffer - SCREENHEIGHT))
+
+    -- Adjust the cursor position based on the scroll direction
+    if linesToScroll > 0 then
+        -- Scrolling down
+        bufferHandler.cursorY = math.min(#bufferHandler.buffer, bufferHandler.cursorY + linesToScroll)
+    else
+        -- Scrolling up
+        bufferHandler.cursorY = math.max(1, bufferHandler.cursorY + linesToScroll)
+    end
+
+    -- Ensure the cursor stays within the visible area
+    bufferHandler.cursorY = math.max(bufferHandler.scrollOffset + 1, math.min(bufferHandler.cursorY, bufferHandler.scrollOffset + SCREENHEIGHT))
+
+    bufferHandler:updateScroll(SCREENHEIGHT)
+end
+
+local function replaceAndMove(bufferHandler, oldPattern, newPattern)
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
+    local startX, endX = line:find(oldPattern, bufferHandler.cursorX)
+    if startX then
+        local newLine = line:sub(1, startX - 1) .. newPattern .. line:sub(endX + 1)
+        bufferHandler.buffer[bufferHandler.cursorY] = newLine
+        bufferHandler.cursorX = startX + #newPattern
+        bufferHandler:updateScroll(SCREENHEIGHT)
+        bufferHandler:updateStatusBar("Replaced '" .. oldPattern .. "' with '" .. newPattern .. "'")
+        return true
+    end
+    return false
+end
+local function wrapSearch(bufferHandler, pattern, direction, searchFunc)
+    local lineCount = #bufferHandler.buffer
+    local startY = bufferHandler.lastSearchPosition.y
+    local startX = bufferHandler.lastSearchPosition.x
+
+    local y = startY
+    while true do
+        local line = bufferHandler.buffer[y]
+        local startX, endX = searchFunc(line, (y == startY) and startX or 1)
+
+        if startX then
+            bufferHandler.cursorY = y
+            bufferHandler.cursorX = startX
+            bufferHandler:updateScroll(SCREENHEIGHT)
+            bufferHandler:updateStatusBar("Found '" .. pattern .. "' at line " .. y)
+
+            bufferHandler.lastSearchPosition = { y = y, x = endX + 1 }
+
+            if y == startY and startX <= bufferHandler.cursorX then
+                bufferHandler.lastSearchPosition = { y = startY, x = 1 }
+            end
+
+            return true -- Indicate that a match was found
+        end
+
+        -- Wraparound search
+        if direction == "forward" then
+            y = y + 1
+            if y > lineCount then y = 1 end
+        else
+            y = y - 1
+            if y < 1 then y = lineCount end
+        end
+
+        bufferHandler.lastSearchPosition.x = 1
+
+        if y == startY then
+            break
+        end
+    end
+
+    bufferHandler:updateStatusError("Pattern '" .. pattern .. "' not found")
+    bufferHandler.lastSearchPosition = { y = 1, x = 1 }
+    return false -- Indicate that no match was found
+end
+-- Helper function to get the selection range
+    local function getSelectionRange(bufferHandler)
+        local startX = math.min(bufferHandler.cursorX, bufferHandler.visualStartX)
+        local startY = math.min(bufferHandler.cursorY, bufferHandler.visualStartY)
+        local endX = math.max(bufferHandler.cursorX, bufferHandler.visualStartX)
+        local endY = math.max(bufferHandler.cursorY, bufferHandler.visualStartY)
+        return startX, startY, endX, endY
+    end
+    
+    -- Helper function to merge lines after deletion or cutting
+    local function mergeLines(bufferHandler, startY, endY)
+        if startY ~= endY then
+            bufferHandler.buffer[startY] = bufferHandler.buffer[startY] .. (bufferHandler.buffer[startY + 1] or "")
+            table.remove(bufferHandler.buffer, startY + 1)
+        end
+    end
+    
+    -- Helper function to update the buffer after visual operations
+    local function updateBufferAfterVisualOperation(bufferHandler, startX, startY)
+        bufferHandler.cursorX = startX
+        bufferHandler.cursorY = startY
+        CommandHandler:execute("end_visual_mode")
+    end
+    
+    -- Helper function to apply a transformation to a visual selection
+    local function transformVisualSelection(bufferHandler, transformFunc)
+        local startX, startY, endX, endY = getSelectionRange(bufferHandler)
+        bufferHandler:saveToHistory()
+    
+        for y = startY, endY do
+            local line = bufferHandler.buffer[y]
+            if y == startY and y == endY then
+                bufferHandler.buffer[y] = line:sub(1, startX - 1) .. transformFunc(line:sub(startX, endX - 1)) .. line:sub(endX)
+            elseif y == startY then
+                bufferHandler.buffer[y] = line:sub(1, startX - 1) .. transformFunc(line:sub(startX))
+            elseif y == endY then
+                bufferHandler.buffer[y] = transformFunc(line:sub(1, endX - 1)) .. line:sub(endX)
+            else
+                bufferHandler.buffer[y] = transformFunc(line)
+            end
+        end
+    
+        updateBufferAfterVisualOperation(bufferHandler, startX, startY)
+    end
+
+    -- Helper function to get the selection range
+local function getSelectionRange(bufferHandler)
+    local startX = math.min(bufferHandler.cursorX, bufferHandler.visualStartX)
+    local startY = math.min(bufferHandler.cursorY, bufferHandler.visualStartY)
+    local endX = math.max(bufferHandler.cursorX, bufferHandler.visualStartX)
+    local endY = math.max(bufferHandler.cursorY, bufferHandler.visualStartY)
+    return startX, startY, endX, endY
+end
+
+-- Helper function to move the cursor to the first non-blank character on a line
+local function moveToFirstNonBlank(bufferHandler, lineNumber)
+    local line = bufferHandler.buffer[lineNumber] or ""
+    local firstNonBlankPos = line:find("%S") or 1 -- Find the first non-blank character or default to 1
+    bufferHandler.cursorX = firstNonBlankPos
+end
+-- === END OF HELPER FUNCTIONS ===
 
 -- === Basic Navigation ===
 CommandHandler:map("move_left", function()
+    bufferHandler:markDirty(bufferHandler.cursorY)  -- Mark the current line as dirty
     bufferHandler.cursorX = math.max(1, bufferHandler.cursorX - 1)
+    bufferHandler:refreshScreen()  -- Refresh the screen to reflect the change
 end)
 
-CommandHandler:map("move_down", function()
-    if bufferHandler.cursorY < #bufferHandler.buffer then
-        bufferHandler.cursorY = bufferHandler.cursorY + 1
-    end
-    bufferHandler.cursorX = math.min(bufferHandler.cursorX, #bufferHandler.buffer[bufferHandler.cursorY] + 1)
+CommandHandler:map("move_right", function()
+    bufferHandler:markDirty(bufferHandler.cursorY)  -- Mark the current line as dirty
+    bufferHandler.cursorX = math.min(#bufferHandler.buffer[bufferHandler.cursorY] + 1, bufferHandler.cursorX + 1)
+    bufferHandler:refreshScreen()  -- Refresh the screen to reflect the change
 end)
 
 CommandHandler:map("move_up", function()
+    bufferHandler:markDirty(bufferHandler.cursorY)  -- Mark the current line as dirty
     if bufferHandler.cursorY > 1 then
         bufferHandler.cursorY = bufferHandler.cursorY - 1
     end
     bufferHandler.cursorX = math.min(bufferHandler.cursorX, #bufferHandler.buffer[bufferHandler.cursorY] + 1)
+    bufferHandler:refreshScreen()  -- Refresh the screen to reflect the change
 end)
 
-CommandHandler:map("move_right", function()
-    bufferHandler.cursorX = math.min(#bufferHandler.buffer[bufferHandler.cursorY] + 1, bufferHandler.cursorX + 1)
+CommandHandler:map("move_down", function()
+    bufferHandler:markDirty(bufferHandler.cursorY)  -- Mark the current line as dirty
+    if bufferHandler.cursorY < #bufferHandler.buffer then
+        bufferHandler.cursorY = bufferHandler.cursorY + 1
+    end
+    bufferHandler.cursorX = math.min(bufferHandler.cursorX, #bufferHandler.buffer[bufferHandler.cursorY] + 1)
+    bufferHandler:refreshScreen()  -- Refresh the screen to reflect the change
+end)
+
+CommandHandler:map("page_down", function()
+    local linesToScroll = SCREENHEIGHT - 2  -- Number of lines to scroll down (subtract 2 for better visibility)
+    scrollPage(bufferHandler, linesToScroll)
+end)
+
+CommandHandler:map("page_up", function()
+    local linesToScroll = -(SCREENHEIGHT - 2)  -- Number of lines to scroll up (subtract 2 for better visibility)
+    scrollPage(bufferHandler, linesToScroll)
+end)
+CommandHandler:map("half_page_down", function()
+    local linesToScroll = math.floor(SCREENHEIGHT / 2)  -- Number of lines to scroll down (half page)
+    scrollPage(bufferHandler, linesToScroll)
+end)
+CommandHandler:map("half_page_up", function()
+    local linesToScroll = -math.floor(SCREENHEIGHT / 2)  -- Number of lines to scroll up (half page)
+    scrollPage(bufferHandler, linesToScroll)
 end)
 
 -- === File and Screen Navigation ===
@@ -100,12 +265,29 @@ end)
 
 CommandHandler:map("move_word_end", function()
     local line = bufferHandler.buffer[bufferHandler.cursorY]
-    local nextWordEnd = line:find("[^%s]+", bufferHandler.cursorX)
-    if nextWordEnd then
-        bufferHandler.cursorX = nextWordEnd + line:sub(nextWordEnd):find("%s") - 1
+    
+    -- Find the start of the next word from the current cursor position
+    local nextWordStart = line:find("[^%s]", bufferHandler.cursorX)
+    
+    if nextWordStart then
+        -- Find the end of the word that starts at 'nextWordStart'
+        local nextWordEnd = line:find("%s", nextWordStart)
+        
+        if nextWordEnd then
+            -- Move to the end of the current word
+            bufferHandler.cursorX = nextWordEnd
+        else
+            -- If there is no space after the word, move to the end of the line
+            bufferHandler.cursorX = #line + 1
+        end
     else
+        -- If no more words are found, move to the end of the line
         bufferHandler.cursorX = #line + 1
     end
+end)
+
+CommandHandler:map("test_status_error", function()
+    bufferHandler:updateStatusError("This is an error message")
 end)
 
 CommandHandler:map("move_to_line_start", function()
@@ -157,9 +339,12 @@ end)
 
 -- === Editing ===
 CommandHandler:map("delete_char", function()
+    bufferHandler:saveToHistory()
     local line = bufferHandler.buffer[bufferHandler.cursorY]
     if bufferHandler.cursorX <= #line then
         bufferHandler.buffer[bufferHandler.cursorY] = line:sub(1, bufferHandler.cursorX - 1) .. line:sub(bufferHandler.cursorX + 1)
+        -- Mark the line as dirty
+        bufferHandler:markDirty(bufferHandler.cursorY)
         bufferHandler:updateStatusBar("Deleted character")
     else
         bufferHandler:updateStatusError("Nothing to delete")
@@ -167,21 +352,58 @@ CommandHandler:map("delete_char", function()
 end)
 
 CommandHandler:map("delete_char_before", function()
+    bufferHandler:saveToHistory()
     local line = bufferHandler.buffer[bufferHandler.cursorY]
     if bufferHandler.cursorX > 1 then
         bufferHandler.buffer[bufferHandler.cursorY] = line:sub(1, bufferHandler.cursorX - 2) .. line:sub(bufferHandler.cursorX)
         bufferHandler.cursorX = bufferHandler.cursorX - 1
+        bufferHandler:markDirty(bufferHandler.cursorY)
         bufferHandler:updateStatusBar("Deleted character")
     else
         bufferHandler:updateStatusError("Nothing to delete")
     end
 end)
 
-CommandHandler:map("cut_line", function()
-    bufferHandler:cutLine()
+CommandHandler:map("cut_line", function(isRepeated)
+    local bufferHandler = require("BufferHandler"):getInstance()
+
+    local lineToCut = bufferHandler.buffer[bufferHandler.cursorY]
+    if isRepeated then
+        bufferHandler.yankRegister = bufferHandler.yankRegister .. "\n" .. lineToCut
+    else
+        bufferHandler.yankRegister = lineToCut
+    end
+
+    -- Remove the line from the buffer
+    table.remove(bufferHandler.buffer, bufferHandler.cursorY)
+
+    -- Adjust cursor position
+    if bufferHandler.cursorY > #bufferHandler.buffer then
+        bufferHandler.cursorY = #bufferHandler.buffer
+    end
+
+    if bufferHandler.cursorY == 0 then
+        table.insert(bufferHandler.buffer, "")
+        bufferHandler.cursorY = 1
+    end
+
+    -- Reset cursor position to the beginning of the line
+
+    -- Mark the entire buffer as dirty
+    for i = 1, #bufferHandler.buffer do
+        bufferHandler:markDirty(i)
+    end
+
+    bufferHandler:updateStatusBar("Cut line")
+    bufferHandler:refreshScreen()
 end)
 
+
+
+
+
 CommandHandler:map("delete_word", function()
+    bufferHandler:saveToHistory()
     local line = bufferHandler.buffer[bufferHandler.cursorY]
     local nextSpace = line:find("%s", bufferHandler.cursorX)
     if nextSpace then
@@ -190,10 +412,12 @@ CommandHandler:map("delete_word", function()
         line = line:sub(1, bufferHandler.cursorX - 1)
     end
     bufferHandler.buffer[bufferHandler.cursorY] = line
+    bufferHandler:markDirty(bufferHandler.cursorY)
     bufferHandler:updateStatusBar("Deleted word")
 end)
 
 CommandHandler:map("change_word", function()
+    bufferHandler:saveToHistory()
     local line = bufferHandler.buffer[bufferHandler.cursorY]
     local nextSpace = line:find("%s", bufferHandler.cursorX)
     if nextSpace then
@@ -202,12 +426,38 @@ CommandHandler:map("change_word", function()
         line = line:sub(1, bufferHandler.cursorX - 1)
     end
     bufferHandler.buffer[bufferHandler.cursorY] = line
+    bufferHandler:markDirty(bufferHandler.cursorY)
     bufferHandler:switchMode("insert")
 end)
 
-CommandHandler:map("yank_line", function()
-    bufferHandler:yankLine()
+CommandHandler:map("yank_line", function(isRepeated)
+    local bufferHandler = require("BufferHandler"):getInstance()
+
+    -- Save the original cursor position
+    local originalCursorY = bufferHandler.cursorY
+
+    if isRepeated then
+        bufferHandler.yankRegister = bufferHandler.yankRegister .. "\n" .. bufferHandler.buffer[bufferHandler.cursorY]
+    else
+        bufferHandler.yankRegister = bufferHandler.buffer[bufferHandler.cursorY]
+    end
+
+    bufferHandler:updateStatusBar("Yanked line")
+
+    -- Move the cursor down after yanking the line
+    if bufferHandler.cursorY < #bufferHandler.buffer then
+        bufferHandler.cursorY = bufferHandler.cursorY + 1
+    end
+
+    -- If this is the final repetition, move the cursor back to the original position
+    if not isRepeated then
+        bufferHandler.cursorY = originalCursorY
+    end
+
+    -- Refresh the screen to reflect the cursor movement
+    bufferHandler:refreshScreen()
 end)
+
 
 
 CommandHandler:map("yank_visual_selection", function()
@@ -217,8 +467,11 @@ end)
 CommandHandler:map("paste_clipboard", function()
     local event, clipboardText = os.pullEvent("paste")
     if clipboardText then
+        
+        bufferHandler:saveToHistory()
         bufferHandler:insertTextAtCursor(clipboardText)
         bufferHandler:updateScroll(SCREENHEIGHT)
+        bufferHandler:refreshScreen()
         bufferHandler:updateStatusBar("Pasted text from clipboard")
     else
         bufferHandler:updateStatusError("No text in clipboard or paste operation failed")
@@ -264,6 +517,77 @@ CommandHandler:map("insert_at_line_start", function()
     bufferHandler:switchMode("insert")
 end)
 
+CommandHandler:map("insert_at_line_end", function()
+    bufferHandler.cursorX = #bufferHandler.buffer[bufferHandler.cursorY] + 1
+    bufferHandler:switchMode("insert")
+end)
+
+CommandHandler:map("delete_char_and_insert", function()
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
+
+    -- If cursor is beyond the line length, there's nothing to delete
+    if bufferHandler.cursorX > #line then
+        bufferHandler:updateStatusError("Nothing to delete at the current cursor position")
+        return
+    end
+
+    -- Save current state for undo
+    bufferHandler:saveToHistory()
+
+    -- Delete the character at the cursor position
+    bufferHandler.buffer[bufferHandler.cursorY] = line:sub(1, bufferHandler.cursorX - 1) .. line:sub(bufferHandler.cursorX + 1)
+
+    -- Refresh the screen and move to insert mode
+    bufferHandler:refreshScreen()
+    bufferHandler:switchMode("insert")
+end)
+
+CommandHandler:map("delete_line_and_insert", function()
+    -- Save current state for undo
+    bufferHandler:saveToHistory()
+
+    -- Delete the entire line where the cursor is
+    table.remove(bufferHandler.buffer, bufferHandler.cursorY)
+
+    -- If we removed the last line, add an empty line
+    if #bufferHandler.buffer == 0 then
+        table.insert(bufferHandler.buffer, "")
+    end
+
+    -- Move the cursor to the start of the new line
+    bufferHandler.cursorX = 1
+
+    -- Ensure cursorY is within the bounds of the buffer
+    if bufferHandler.cursorY > #bufferHandler.buffer then
+        bufferHandler.cursorY = #bufferHandler.buffer
+    end
+
+    -- Refresh the screen and move to insert mode
+    bufferHandler:refreshScreen()
+    bufferHandler:switchMode("insert")
+end)
+
+CommandHandler:map("delete_until_end_of_line_and_insert", function()
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
+
+    -- If the cursor is already at the end of the line, there's nothing to delete
+    if bufferHandler.cursorX > #line then
+        bufferHandler:updateStatusError("Cursor is already at the end of the line")
+        bufferHandler:switchMode("insert")
+        return
+    end
+
+    -- Save current state for undo
+    bufferHandler:saveToHistory()
+
+    -- Delete from the cursor position to the end of the line
+    bufferHandler.buffer[bufferHandler.cursorY] = line:sub(1, bufferHandler.cursorX - 1)
+
+    -- Refresh the screen and move to insert mode
+    bufferHandler:refreshScreen()
+    bufferHandler:switchMode("insert")
+end)
+
 CommandHandler:map("open_line_below", function()
     local line = bufferHandler.cursorY
     table.insert(bufferHandler.buffer, line + 1, "")
@@ -293,7 +617,7 @@ CommandHandler:map("end_visual_mode", function()
 end)
 
 -- === Search and Replace Commands ===
-CommandHandler:map("search", function(pattern)
+CommandHandler:map("search", function(pattern, direction)
     if not pattern then
         pattern = bufferHandler.lastSearchPattern
         if not pattern then
@@ -305,36 +629,17 @@ CommandHandler:map("search", function(pattern)
         bufferHandler.lastSearchPosition = { y = bufferHandler.cursorY, x = bufferHandler.cursorX + 1 }
     end
 
-    local startSearchY = bufferHandler.lastSearchPosition.y
-    local startSearchX = bufferHandler.lastSearchPosition.x
+    direction = direction or "forward"
 
-    for y = startSearchY, #bufferHandler.buffer do
-        local line = bufferHandler.buffer[y]
-        local startX, endX = line:find(pattern, (y == startSearchY) and startSearchX or 1)
-
-        if startX then
-            bufferHandler.cursorY = y
-            bufferHandler.cursorX = startX
-            bufferHandler:updateScroll(SCREENHEIGHT)
-            bufferHandler:updateStatusBar("Found '" .. pattern .. "' at line " .. y)
-
-            bufferHandler.lastSearchPosition = { y = y, x = endX + 1 }
-
-            if y == startSearchY and startX <= bufferHandler.cursorX then
-                bufferHandler.lastSearchPosition = { y = startSearchY, x = 1 }
-            end
-
-            return
-        end
-
-        bufferHandler.lastSearchPosition.x = 1
+    local searchFunc = function(line, startPos)
+        return line:find(pattern, startPos)
     end
 
-    bufferHandler:updateStatusError("Pattern '" .. pattern .. "' not found")
-    bufferHandler.lastSearchPosition = { y = 1, x = 1 }
+    wrapSearch(bufferHandler, pattern, direction, searchFunc)
 end)
 
-CommandHandler:map("replace", function(oldPattern, newPattern)
+
+CommandHandler:map("replace", function(oldPattern, newPattern, direction)
     if not oldPattern or not newPattern then
         bufferHandler:updateStatusError("Usage: :replace <old> <new>")
         return
@@ -344,39 +649,28 @@ CommandHandler:map("replace", function(oldPattern, newPattern)
     bufferHandler.replaceWithPattern = newPattern
     bufferHandler.lastReplacePosition = { y = bufferHandler.cursorY, x = bufferHandler.cursorX + 1 }
 
-    local replacements = 0
+    direction = direction or "forward"
 
-    local startReplaceY = bufferHandler.lastReplacePosition.y
-    local startReplaceX = bufferHandler.lastReplacePosition.x
-
-    for y = startReplaceY, #bufferHandler.buffer do
-        local line = bufferHandler.buffer[y]
-        local startX, endX = line:find(oldPattern, (y == startReplaceY) and startReplaceX or 1)
-
-        if startX then
-            local newLine = line:sub(1, startX - 1) .. newPattern .. line:sub(endX + 1)
-            bufferHandler.buffer[y] = newLine
-            replacements = replacements + 1
-
-            bufferHandler.cursorY = y
-            bufferHandler.cursorX = startX
-            bufferHandler:updateScroll(SCREENHEIGHT)
-            bufferHandler:updateStatusBar("Replaced '" .. oldPattern .. "' with '" .. newPattern .. "' at line " .. y)
-
-            bufferHandler.lastReplacePosition = { y = y, x = startX + #newPattern }
-
-            if y == startReplaceY and startX <= bufferHandler.cursorX then
-                bufferHandler.lastReplacePosition = { y = startSearchY, x = 1 }
-            end
-
-            return
-        end
-
-        bufferHandler.lastReplacePosition.x = 1
+    local searchFunc = function(line, startPos)
+        return line:find(oldPattern, startPos)
     end
 
-    bufferHandler:updateStatusError("No more occurrences of '" .. oldPattern .. "' found")
-    bufferHandler.lastReplacePosition = { y = 1, x = 1 }
+    local found = wrapSearch(bufferHandler, oldPattern, direction, searchFunc)
+    if found then
+        replaceAndMove(bufferHandler, oldPattern, newPattern)
+    end
+end)
+
+CommandHandler:map("repeat_last_search_or_replace", function()
+    if bufferHandler.lastSearchPattern then
+        -- Reuse the existing search logic
+        CommandHandler:execute("search", bufferHandler.lastSearchPattern)
+    elseif bufferHandler.lastReplacePattern and bufferHandler.replaceWithPattern then
+        -- Reuse the existing replace logic
+        CommandHandler:execute("replace", bufferHandler.lastReplacePattern, bufferHandler.replaceWithPattern)
+    else
+        bufferHandler:updateStatusError("No previous search or replace operation to repeat")
+    end
 end)
 
 CommandHandler:map("replace_all", function(oldPattern, newPattern)
@@ -531,31 +825,9 @@ CommandHandler:map("search_next", function()
         bufferHandler:updateStatusError("No previous search pattern to repeat")
     end
 end)
--- === Searching within the Line ===
-CommandHandler:map("find_character", function()
-    bufferHandler:switchMode("command", "find ")
-end)
 
-CommandHandler:map("find_before_character", function()
-    bufferHandler:switchMode("command", "find_before ")
-end)
+-- === Visual Mode Stuff == 
 
--- === Repeating Last Character Search ===
-CommandHandler:map("repeat_last_find", function()
-    if bufferHandler.lastFindCharacter then
-        CommandHandler:execute("find_character")
-    else
-        bufferHandler:updateStatusError("No previous find to repeat")
-    end
-end)
-
-CommandHandler:map("repeat_last_find_reverse", function()
-    if bufferHandler.lastFindCharacter then
-        -- Implement reverse find logic here
-    else
-        bufferHandler:updateStatusError("No previous find to repeat")
-    end
-end)
 
 CommandHandler:map("delete_visual_selection", function()
     if not bufferHandler.visualStartX or not bufferHandler.visualStartY then
@@ -563,205 +835,132 @@ CommandHandler:map("delete_visual_selection", function()
         return
     end
 
-    -- Save current state for undo
-    bufferHandler:saveToHistory()
+    local startX, startY, endX, endY = getSelectionRange(bufferHandler)
 
-    -- Determine the range of the selection
-    local startX, startY = math.min(bufferHandler.cursorX, bufferHandler.visualStartX), math.min(bufferHandler.cursorY, bufferHandler.visualStartY)
-    local endX, endY = math.max(bufferHandler.cursorX, bufferHandler.visualStartX), math.max(bufferHandler.cursorY, bufferHandler.visualStartY)
+    bufferHandler:saveToHistory()
 
     -- Delete the selected text
     for y = startY, endY do
         local line = bufferHandler.buffer[y]
         if y == startY and y == endY then
-            -- Single-line selection
             bufferHandler.buffer[y] = line:sub(1, startX - 1) .. line:sub(endX)
         elseif y == startY then
-            -- Start of multi-line selection
             bufferHandler.buffer[y] = line:sub(1, startX - 1)
         elseif y == endY then
-            -- End of multi-line selection
             bufferHandler.buffer[y] = line:sub(endX)
         else
-            -- Middle lines of multi-line selection
             bufferHandler.buffer[y] = ""
         end
     end
 
-    -- Adjust cursor position after deletion
-    bufferHandler.cursorX = startX
-    bufferHandler.cursorY = startY
-
-    -- Handle merging of lines if multi-line selection was deleted
-    if startY ~= endY then
-        bufferHandler.buffer[startY] = bufferHandler.buffer[startY] .. (bufferHandler.buffer[startY + 1] or "")
-        table.remove(bufferHandler.buffer, startY + 1)
-    end
-
-    -- End visual mode
-    CommandHandler:execute("end_visual_mode")
+    mergeLines(bufferHandler, startY, endY)
+    updateBufferAfterVisualOperation(bufferHandler, startX, startY)
 
     bufferHandler:updateStatusBar("Deleted visual selection")
 end)
+
 CommandHandler:map("cut_visual_selection", function()
     if not bufferHandler.visualStartX or not bufferHandler.visualStartY then
         bufferHandler:updateStatusError("No selection to cut")
         return
     end
 
-    -- Save current state for undo
+    local startX, startY, endX, endY = getSelectionRange(bufferHandler)
+
     bufferHandler:saveToHistory()
-
-    -- Determine the range of the selection
-    local startX, startY = math.min(bufferHandler.cursorX, bufferHandler.visualStartX), math.min(bufferHandler.cursorY, bufferHandler.visualStartY)
-    local endX, endY = math.max(bufferHandler.cursorX, bufferHandler.visualStartX), math.max(bufferHandler.cursorY, bufferHandler.visualStartY)
-
-    -- Clear the yank register
     bufferHandler.yankRegister = ""
 
     -- Cut the selected text and save it to yank register
     for y = startY, endY do
         local line = bufferHandler.buffer[y]
         if y == startY and y == endY then
-            -- Single-line selection
             bufferHandler.yankRegister = line:sub(startX, endX - 1)
             bufferHandler.buffer[y] = line:sub(1, startX - 1) .. line:sub(endX)
         elseif y == startY then
-            -- Start of multi-line selection
             bufferHandler.yankRegister = line:sub(startX) .. "\n"
             bufferHandler.buffer[y] = line:sub(1, startX - 1)
         elseif y == endY then
-            -- End of multi-line selection
             bufferHandler.yankRegister = bufferHandler.yankRegister .. line:sub(1, endX - 1)
             bufferHandler.buffer[y] = line:sub(endX)
         else
-            -- Middle lines of multi-line selection
             bufferHandler.yankRegister = bufferHandler.yankRegister .. line .. "\n"
             bufferHandler.buffer[y] = ""
         end
     end
 
-    -- Adjust cursor position after cutting
-    bufferHandler.cursorX = startX
-    bufferHandler.cursorY = startY
-
-    -- Handle merging of lines if multi-line selection was cut
-    if startY ~= endY then
-        bufferHandler.buffer[startY] = bufferHandler.buffer[startY] .. (bufferHandler.buffer[startY + 1] or "")
-        table.remove(bufferHandler.buffer, startY + 1)
-    end
-
-    -- End visual mode
-    CommandHandler:execute("end_visual_mode")
+    mergeLines(bufferHandler, startY, endY)
+    updateBufferAfterVisualOperation(bufferHandler, startX, startY)
 
     bufferHandler:updateStatusBar("Cut visual selection")
 end)
 
-CommandHandler:map("unindent_visual_selection", function()
-    if not bufferHandler.visualStartX or not bufferHandler.visualStartY then
-        bufferHandler:updateStatusError("No selection to unindent")
-        return
+CommandHandler:map("indent", function(isRepeated)
+    local function indentLine(line)
+        return " " .. line  -- Indent with four spaces
     end
-
-    local startY = math.min(bufferHandler.cursorY, bufferHandler.visualStartY)
-    local endY = math.max(bufferHandler.cursorY, bufferHandler.visualStartY)
 
     bufferHandler:saveToHistory()
 
-    for y = startY, endY do
-        if bufferHandler.buffer[y]:sub(1, 4) == "    " then
-            bufferHandler.buffer[y] = bufferHandler.buffer[y]:sub(5)
-        end
+    bufferHandler.cursorX = 1
+    bufferHandler.buffer[bufferHandler.cursorY] = indentLine(bufferHandler.buffer[bufferHandler.cursorY])
+    moveToFirstNonBlank(bufferHandler, bufferHandler.cursorY)
+    View:drawLine(bufferHandler.cursorY - bufferHandler.scrollOffset)
+
+    if bufferHandler.cursorY < #bufferHandler.buffer then
+        bufferHandler.cursorY = bufferHandler.cursorY + 1
     end
 
-    CommandHandler:execute("end_visual_mode")
-    bufferHandler:updateStatusBar("Unindented visual selection")
+    bufferHandler:updateStatusBar("Indented line(s)")
+    bufferHandler:refreshScreen()
 end)
-CommandHandler:map("indent_visual_selection", function()
-    if not bufferHandler.visualStartX or not bufferHandler.visualStartY then
-        bufferHandler:updateStatusError("No selection to indent")
-        return
-    end
 
-    local startY = math.min(bufferHandler.cursorY, bufferHandler.visualStartY)
-    local endY = math.max(bufferHandler.cursorY, bufferHandler.visualStartY)
-    
+CommandHandler:map("unindent", function(isRepeated)
+    local function unindentLine(line)
+        -- Check if the line starts with 1 space and remove it if so
+        return line:sub(1, 1) == " " and line:sub(2) or line
+    end
 
     bufferHandler:saveToHistory()
 
-    for y = startY, endY do
-        bufferHandler.buffer[y] = "    " .. bufferHandler.buffer[y]
+    bufferHandler.cursorX = 1
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
+    if line:match("^%s") then
+        bufferHandler.buffer[bufferHandler.cursorY] = unindentLine(line)
+        moveToFirstNonBlank(bufferHandler, bufferHandler.cursorY)
+        View:drawLine(bufferHandler.cursorY - bufferHandler.scrollOffset)
     end
 
-    CommandHandler:execute("end_visual_mode")
-    bufferHandler:updateStatusBar("Indented visual selection")
+    if bufferHandler.cursorY < #bufferHandler.buffer then
+        bufferHandler.cursorY = bufferHandler.cursorY + 1
+    end
+
+    bufferHandler:updateStatusBar("Unindented line(s)")
+    bufferHandler:refreshScreen()
 end)
+
+
+
+
+
+
+
 CommandHandler:map("uppercase_visual_selection", function()
-    if not bufferHandler.visualStartX or not bufferHandler.visualStartY then
-        bufferHandler:updateStatusError("No selection to convert")
-        return
-    end
-
-    local startY = math.min(bufferHandler.cursorY, bufferHandler.visualStartY)
-    local endY = math.max(bufferHandler.cursorY, bufferHandler.visualStartY)
-
-    bufferHandler:saveToHistory()
-
-    for y = startY, endY do
-        local line = bufferHandler.buffer[y]
-        if y == startY and y == endY then
-            bufferHandler.buffer[y] = line:sub(1, bufferHandler.visualStartX - 1) ..
-                            line:sub(bufferHandler.visualStartX, bufferHandler.cursorX - 1):upper() ..
-                            line:sub(bufferHandler.cursorX)
-        elseif y == startY then
-            bufferHandler.buffer[y] = line:sub(1, bufferHandler.visualStartX - 1) .. line:sub(bufferHandler.visualStartX):upper()
-        elseif y == endY then
-            bufferHandler.buffer[y] = line:sub(1, bufferHandler.cursorX - 1):upper() .. line:sub(bufferHandler.cursorX)
-        else
-            bufferHandler.buffer[y] = line:upper()
-        end
-    end
-
-    CommandHandler:execute("end_visual_mode")
+    transformVisualSelection(bufferHandler, string.upper)
     bufferHandler:updateStatusBar("Uppercased visual selection")
 end)
+
 CommandHandler:map("lowercase_visual_selection", function()
-    if not bufferHandler.visualStartX or not bufferHandler.visualStartY then
-        bufferHandler:updateStatusError("No selection to convert")
-        return
-    end
-
-    local startY = math.min(bufferHandler.cursorY, bufferHandler.visualStartY)
-    local endY = math.max(bufferHandler.cursorY, bufferHandler.visualStartY)
-
-    bufferHandler:saveToHistory()
-
-    for y = startY, endY do
-        local line = bufferHandler.buffer[y]
-        if y == startY and y == endY then
-            bufferHandler.buffer[y] = line:sub(1, bufferHandler.visualStartX - 1) ..
-                            line:sub(bufferHandler.visualStartX, bufferHandler.cursorX - 1):lower() ..
-                            line:sub(bufferHandler.cursorX)
-        elseif y == startY then
-            bufferHandler.buffer[y] = line:sub(1, bufferHandler.visualStartX - 1) .. line:sub(bufferHandler.visualStartX):lower()
-        elseif y == endY then
-            bufferHandler.buffer[y] = line:sub(1, bufferHandler.cursorX - 1):lower() .. line:sub(bufferHandler.cursorX)
-        else
-            bufferHandler.buffer[y] = line:lower()
-        end
-    end
-
-    CommandHandler:execute("end_visual_mode")
+    transformVisualSelection(bufferHandler, string.lower)
     bufferHandler:updateStatusBar("Lowercased visual selection")
 end)
+
 CommandHandler:map("join_visual_selection", function()
     if not bufferHandler.visualStartX or not bufferHandler.visualStartY then
         bufferHandler:updateStatusError("No selection to join")
         return
     end
 
-    local startY = math.min(bufferHandler.cursorY, bufferHandler.visualStartY)
-    local endY = math.max(bufferHandler.cursorY, bufferHandler.visualStartY)
+    local startX, startY, endX, endY = getSelectionRange(bufferHandler)
 
     bufferHandler:saveToHistory()
 
@@ -780,43 +979,18 @@ CommandHandler:map("join_visual_selection", function()
         table.remove(bufferHandler.buffer, startY + 1)
     end
 
-    CommandHandler:execute("end_visual_mode")
+    updateBufferAfterVisualOperation(bufferHandler, startX, startY)
     bufferHandler:updateStatusBar("Joined lines")
 end)
+
 CommandHandler:map("swap_case_visual_selection", function()
-    if not bufferHandler.visualStartX or not bufferHandler.visualStartY then
-        bufferHandler:updateStatusError("No selection to swap case")
-        return
-    end
-
-    local startY = math.min(bufferHandler.cursorY, bufferHandler.visualStartY)
-    local endY = math.max(bufferHandler.cursorY, bufferHandler.visualStartY)
-
     bufferHandler:saveToHistory()
-
-    for y = startY, endY do
-        local line = bufferHandler.buffer[y]
-        if y == startY and y == endY then
-            bufferHandler.buffer[y] = line:sub(1, bufferHandler.visualStartX - 1) ..
-                            line:sub(bufferHandler.visualStartX, bufferHandler.cursorX - 1):gsub(".", function(c)
-                                return c:match("%l") and c:upper() or c:lower()
-                            end) ..
-                            line:sub(bufferHandler.cursorX)
-        elseif y == startY then
-            bufferHandler.buffer[y] = line:sub(1, bufferHandler.visualStartX - 1) .. line:sub(bufferHandler.visualStartX):gsub(".", function(c)
-                return c:match("%l") and c:upper() or c:lower()
-            end)
-        elseif y == endY then
-            bufferHandler.buffer[y] = line:sub(1, bufferHandler.cursorX - 1):gsub(".", function(c)
-                return c:match("%l") and c:upper() or c:lower()
-            end) .. line:sub(bufferHandler.cursorX)
-        else
-            bufferHandler.buffer[y] = line:gsub(".", function(c)
-                return c:match("%l") and c:upper() or c:lower()
-            end)
-        end
+    local function swapCase(text)
+        return text:gsub(".", function(c)
+            return c:match("%l") and c:upper() or c:lower()
+        end)
     end
 
-    CommandHandler:execute("end_visual_mode")
+    transformVisualSelection(bufferHandler, swapCase)
     bufferHandler:updateStatusBar("Swapped case of visual selection")
 end)

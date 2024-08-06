@@ -8,7 +8,8 @@ function CommandHandler:new()
         instance = {
             commands = {},
             commandHistory = {},
-            historyIndex = nil  -- Track the current position in the history
+            historyIndex = nil,  -- Track the current position in the history
+            numericPrefix = nil  -- Track numeric prefixes
         }
         setmetatable(instance, CommandHandler)
     end
@@ -26,36 +27,46 @@ function CommandHandler:map(name, func)
     self.commands[name] = func
 end
 
-function CommandHandler:execute(command)
-    -- Check for an empty command
+function CommandHandler:execute(command, numericPrefix)
+    -- Handle empty or nil command cases
     if command == nil or command == "" then
+        BufferHandler:switchMode("normal")
+        KeyHandler:getInstance().currentModifierHeld = ""
+        KeyHandler:getInstance():resetKeySequence()
         View:showPopup("No command entered")
         return
     end
 
-    table.insert(self.commandHistory, command)  -- Save command to history
-    self.historyIndex = nil  -- Reset history navigation
+    -- Add command to history
+    table.insert(self.commandHistory, command)
+    self.historyIndex = nil
 
-    local args = {}
-    for arg in command:gmatch("%S+") do
-        table.insert(args, arg)
+    -- If no numericPrefix is provided, attempt to parse it from the command string
+    if not numericPrefix then
+        numericPrefix, command = command:match("^(%d*)(.*)$")
+        numericPrefix = tonumber(numericPrefix) or 1
     end
 
-    local commandName = args[1]
-    table.remove(args, 1)
-
-    if self.commands[commandName] then
+    if self.commands[command] then
         -- Wrap the command execution in pcall to catch any runtime errors
         local success, err = pcall(function()
-            self.commands[commandName](table.unpack(args))
+            for i = 1, numericPrefix do
+                self.commands[command](i > 1)  -- Pass `true` for isRepeated on subsequent executions
+            end
         end)
         if not success then
             View:showPopup("Err: " .. err)
         end
     else
-        View:showPopup("Unknown command: " .. commandName)
+        View:showPopup("Unknown command: " .. command)
     end
+
+    -- Reset key sequence after execution
+    KeyHandler:getInstance():resetKeySequence()
 end
+
+
+
 function CommandHandler:handleCommandInput(model, view, initialCommand, autoExecute)
     local command = initialCommand or ""  -- Start with the provided initialCommand or an empty string
 
@@ -64,8 +75,11 @@ function CommandHandler:handleCommandInput(model, view, initialCommand, autoExec
         if #self.commandHistory > 0 then
             command = self.commandHistory[#self.commandHistory]  -- Use the last command in history
         else
+            
+            KeyHandler:getInstance().currentModifierHeld = ""
             View:showPopup("No previous command to execute")
             model:switchMode("normal")
+            KeyHandler:getInstance():resetKeySequence()
             return
         end
     end
@@ -76,6 +90,7 @@ function CommandHandler:handleCommandInput(model, view, initialCommand, autoExec
     if autoExecute and command ~= "" then
         self:execute(command)
         model:switchMode("normal")  -- Switch back to normal mode
+        KeyHandler:getInstance():resetKeySequence()
         return
     end
 
@@ -109,9 +124,19 @@ function CommandHandler:handleCommandInput(model, view, initialCommand, autoExec
             model:updateStatusBar(":" .. command, view)  -- Display the command prefixed with ":"
         elseif event == "key" then
             if param1 == keys.enter then
-                self:execute(command)  -- Execute the command when Enter is pressed
-                model:switchMode("normal")  -- Switch back to normal mode
-                break
+                if command == "" then
+                    model:switchMode("normal")  -- Exit command mode
+                    KeyHandler:getInstance().currentModifierHeld = ""
+                    KeyHandler:getInstance():resetKeySequence()  -- Reset key sequence
+                    View:showPopup("No command entered")
+                    break
+                else
+                    KeyHandler:getInstance().currentModifierHeld = ""
+                    self:execute(command)  -- Execute the command when Enter is pressed
+                    model:switchMode("normal")  -- Switch back to normal mode
+                    KeyHandler:getInstance():resetKeySequence()
+                    break
+                end
             elseif param1 == keys.backspace then
                 command = command:sub(1, -2)  -- Handle backspace
                 model:updateStatusBar(":" .. command, view)
@@ -143,12 +168,12 @@ function CommandHandler:handleCommandInput(model, view, initialCommand, autoExec
                     model:updateStatusBar(":" .. command, view)
                 end
             elseif param1 == keys.escape then
-                return  -- Exit command mode on Escape
+                KeyHandler:getInstance():resetKeySequence()
+                model:switchMode("normal")  -- Exit command mode on Escape
+                return
             end
         end
     end
 end
-
-
 
 return CommandHandler
