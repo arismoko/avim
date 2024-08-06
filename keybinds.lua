@@ -941,7 +941,7 @@ InputHandler:map({"visual"}, {"d"}, "cut_visual_selection", function()
     InputHandler:execute("end_visual_mode")
 end, "Cut Visual Selection and Exit Visual Mode")
 
-InputHandler:map({"visual"}, {"<"}, "unindent", function()
+InputHandler:map({"visual","normal"}, {"<"}, "unindent", function()
     local function unindentLine(line)
         return line:sub(1, 1) == " " and line:sub(2) or line
     end
@@ -962,9 +962,9 @@ InputHandler:map({"visual"}, {"<"}, "unindent", function()
 
     bufferHandler:updateStatusBar("Unindented line(s)")
     bufferHandler:refreshScreen()
-end, "Unindent Visual Selection")
+end, "Unindent Visual Selection or line")
 
-InputHandler:map({"visual"}, {">"}, "indent", function()
+InputHandler:map({"visual","normal"}, {">"}, "indent", function()
     local function indentLine(line)
         return " " .. line
     end
@@ -982,7 +982,7 @@ InputHandler:map({"visual"}, {">"}, "indent", function()
 
     bufferHandler:updateStatusBar("Indented line(s)")
     bufferHandler:refreshScreen()
-end, "Indent Visual Selection")
+end, "Indent Visual Selection or Line")
 
 InputHandler:map({"visual"}, {"U"}, "uppercase_visual_selection", function()
     transformVisualSelection(bufferHandler, string.upper)
