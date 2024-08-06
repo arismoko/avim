@@ -175,6 +175,7 @@ local function init(components)
         if bufferHandler.errorWindow then
             bufferHandler.errorWindow:close()
             bufferHandler.errorWindow = nil
+            View:drawScreen()
         end
     end
 end
@@ -278,6 +279,7 @@ end
             end
             term.setBackgroundColor(colors.black)
             term.setTextColor(colors.white)
+            View:drawScreen()
         end
 
         function window:scrollUp()
@@ -288,6 +290,7 @@ end
                 end
                 self.buffer[self.height] = string.rep(" ", self.width)
                 self:show()
+                View:drawScreen()
             end
         end
 
@@ -299,6 +302,7 @@ end
                 end
                 self.buffer[1] = string.rep(" ", self.width)
                 self:show()
+                View:drawScreen()
             end
         end
 
@@ -306,11 +310,13 @@ end
             local view = View:getInstance()
 
             view.activeWindow = nil
+            view:drawScreen()
         end
 
         function window:writeText(x, y, text)
             local bufferLine = self.buffer[y] or string.rep(" ", self.width)
             self.buffer[y] = bufferLine:sub(1, x - 1) .. text .. bufferLine:sub(x + #text)
+            View:drawScreen()
         end
 
         function window:write(text)
@@ -324,12 +330,14 @@ end
                 self.currentLine = self.currentLine + 1
                 self.currentColumn = 1
             end
+            View:drawScreen()
         end
 
         function window:writeline(text)
             self:write(text)
             self.currentLine = self.currentLine + 1
             self.currentColumn = 1
+            View:drawScreen()
         end
 
         function window:clear()
@@ -338,6 +346,7 @@ end
             end
             self.currentLine = 1
             self.currentColumn = 1
+            View:drawScreen()
         end
 
         function window:print(text)
@@ -357,6 +366,7 @@ end
 
         table.insert(View:getInstance().windows, window)
 
+        View:drawScreen()
         return window
     end
     function View:showErrorWindow(errorMessage, lineNumber)
@@ -398,6 +408,7 @@ end
             bufferHandler:saveFile()
             bufferHandler.checkCurrentFileForErrors()
             bufferHandler:updateStatusBar("Checked for errors!")
+            viewInstance:drawScreen()
         end
     end)
     inputHandler:map({"normal", "visual"}, {"h"}, "move_left", function()
