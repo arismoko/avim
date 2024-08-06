@@ -142,13 +142,11 @@ end
 InputHandler:map({"normal", "visual"}, {"h"}, "move_left", function()
     bufferHandler:markDirty(bufferHandler.cursorY)  
     bufferHandler.cursorX = math.max(1, bufferHandler.cursorX - 1)
-    bufferHandler:refreshScreen()  
 end, "Move Left")
 
 InputHandler:map({"normal", "visual"}, {"l"}, "move_right", function()
     bufferHandler:markDirty(bufferHandler.cursorY)  
     bufferHandler.cursorX = math.min(#bufferHandler.buffer[bufferHandler.cursorY] + 1, bufferHandler.cursorX + 1)
-    bufferHandler:refreshScreen()  
 end, "Move Right")
 
 InputHandler:map({"normal", "visual"}, {"k"}, "move_up", function()
@@ -157,7 +155,6 @@ InputHandler:map({"normal", "visual"}, {"k"}, "move_up", function()
         bufferHandler.cursorY = bufferHandler.cursorY - 1
     end
     bufferHandler.cursorX = math.min(bufferHandler.cursorX, #bufferHandler.buffer[bufferHandler.cursorY] + 1)
-    bufferHandler:refreshScreen()  
 end, "Move Up")
 
 InputHandler:map({"normal", "visual"}, {"j"}, "move_down", function()
@@ -166,7 +163,6 @@ InputHandler:map({"normal", "visual"}, {"j"}, "move_down", function()
         bufferHandler.cursorY = bufferHandler.cursorY + 1
     end
     bufferHandler.cursorX = math.min(bufferHandler.cursorX, #bufferHandler.buffer[bufferHandler.cursorY] + 1)
-    bufferHandler:refreshScreen()  
 end, "Move Down")
 
 InputHandler:map({"normal", "visual"}, {"ctrl + f"}, "page_down", function()
@@ -313,7 +309,6 @@ InputHandler:map({"normal"}, {"d + d"}, "cut_line", function(isRepeated,iteratio
     end
 
     bufferHandler:updateStatusBar("Cut line")
-    bufferHandler:refreshScreen()
 end, "Cut Line")
 
 InputHandler:map({"normal"}, {"d + w"}, "delete_word", function()
@@ -368,8 +363,6 @@ InputHandler:map({"normal"}, {"y + y"}, "yank_line", function(isRepeated,iterati
         bufferHandler.cursorY = originalCursorY
     end
 
-    -- Refresh the screen to reflect the cursor movement
-    bufferHandler:refreshScreen()
 end, "Yank Line")
 
 InputHandler:map({"normal", "visual"}, {"x"}, "delete_char", function()
@@ -481,7 +474,6 @@ InputHandler:map({"normal"}, {"s^"}, "delete_char_and_insert", function()
     bufferHandler.buffer[bufferHandler.cursorY] = line:sub(1, bufferHandler.cursorX - 1) .. line:sub(bufferHandler.cursorX + 1)
 
     -- Refresh the screen and move to insert mode
-    bufferHandler:refreshScreen()
     bufferHandler:switchMode("insert")
 end, "Substitute Char")
 
@@ -506,7 +498,6 @@ InputHandler:map({"normal"}, {"shift + s^"}, "delete_line_and_insert", function(
     end
 
     -- Refresh the screen and move to insert mode
-    bufferHandler:refreshScreen()
     bufferHandler:switchMode("insert")
 end, "Substitute Line")
 
@@ -527,7 +518,6 @@ InputHandler:map({"normal"}, {"shift + c^"}, "delete_until_end_of_line_and_inser
     bufferHandler.buffer[bufferHandler.cursorY] = line:sub(1, bufferHandler.cursorX - 1)
 
     -- Refresh the screen and move to insert mode
-    bufferHandler:refreshScreen()
     bufferHandler:switchMode("insert")
 end, "Change to Line End")
 
@@ -825,13 +815,11 @@ end, "Exit to Normal Mode")
 InputHandler:map({"insert"}, {"left"}, "move_left", function()
     bufferHandler:markDirty(bufferHandler.cursorY)
     bufferHandler.cursorX = math.max(1, bufferHandler.cursorX - 1)
-    bufferHandler:refreshScreen()
 end, "Move Left")
 
 InputHandler:map({"insert"}, {"right"}, "move_right", function()
     bufferHandler:markDirty(bufferHandler.cursorY)
     bufferHandler.cursorX = math.min(#bufferHandler.buffer[bufferHandler.cursorY] + 1, bufferHandler.cursorX + 1)
-    bufferHandler:refreshScreen()
 end, "Move Right")
 
 InputHandler:map({"insert"}, {"up"}, "move_up", function()
@@ -840,7 +828,6 @@ InputHandler:map({"insert"}, {"up"}, "move_up", function()
         bufferHandler.cursorY = bufferHandler.cursorY - 1
     end
     bufferHandler.cursorX = math.min(bufferHandler.cursorX, #bufferHandler.buffer[bufferHandler.cursorY] + 1)
-    bufferHandler:refreshScreen()
 end, "Move Up")
 
 InputHandler:map({"insert"}, {"down"}, "move_down", function()
@@ -849,12 +836,10 @@ InputHandler:map({"insert"}, {"down"}, "move_down", function()
         bufferHandler.cursorY = bufferHandler.cursorY + 1
     end
     bufferHandler.cursorX = math.min(bufferHandler.cursorX, #bufferHandler.buffer[bufferHandler.cursorY] + 1)
-    bufferHandler:refreshScreen()
 end, "Move Down")
 
 InputHandler:map({"insert"}, {"tab"}, "insert_tab", function()
     bufferHandler:insertChar(" ")
-    View:drawLine(bufferHandler.cursorY - bufferHandler.scrollOffset)
 end, "Insert Tab")
 
 InputHandler:map({"insert"}, {"enter"}, "insert_enter", function()
