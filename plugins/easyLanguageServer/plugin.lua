@@ -337,6 +337,7 @@ end
             self:write(text)
             self.currentLine = self.currentLine + 1
             self.currentColumn = 1
+            bufferHandler:refreshScreen()
             View:drawScreen()
         end
 
