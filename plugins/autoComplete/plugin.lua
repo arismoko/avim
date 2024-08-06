@@ -42,41 +42,56 @@ local function init(components)
     local autocompleteKeywords = {
         "and", "break", "do", "else", "elseif", "end", "for", "function", "if", "in", 
         "local", "nil", "not", "or", "repeat", "require", "return", "then", "until", 
-        "while", "View", "Model", "highlightLine", "createWindow"
+        "while"
     }
 
     -- Function to show the autocomplete window
     function View:showAutocompleteWindow(suggestions)
         local x = bufferHandler.cursorX
-        local y = bufferHandler.cursorY - bufferHandler.scrollOffset + 1 
-
-        if y > SCREENHEIGHT / 2 then
-            y = y - 6 
-        end
-
-        local width = math.max(10, #suggestions[1] + 5)
+        local y = bufferHandler.cursorY - bufferHandler.scrollOffset + 1
+    
+        -- Calculate the height of the autocomplete window
         local height = math.min(#suggestions, 5)
-
-        if #suggestions > 5 then
-            suggestions = {table.unpack(suggestions, 1, 5)}
+        
+        -- Determine the dynamic width based on the longest suggestion, capped at 15 characters
+        local maxSuggestionLength = 0
+        for _, suggestion in ipairs(suggestions) do
+            maxSuggestionLength = math.max(maxSuggestionLength, #suggestion)
         end
-
+    
+        -- Set the width to be the length of the longest suggestion, plus padding, up to a maximum of 15 characters
+        local width = math.min(maxSuggestionLength + 5, 15)
+    
+        -- Adjust 'y' to place the window above the cursor line if possible
+        if y > SCREENHEIGHT/2 then
+            y = y - height - 1 -- Move the window above the cursor line
+        end
+    
+        -- Ensure the window doesn't go off-screen
+        if y < 1 then
+            y = 1
+        elseif y + height - 1 > SCREENHEIGHT then
+            y = SCREENHEIGHT - height + 1
+        end
+    
         if bufferHandler.autocompleteWindow then
             bufferHandler.autocompleteWindow:clear()
         else
             bufferHandler.autocompleteWindow = self:createWindow(x, y, width, height, colors.lightGray, colors.black)
             bufferHandler:updateStatusBar("Autocomplete suggestions window opened")
         end
-
+    
         for i, suggestion in ipairs(suggestions) do
             bufferHandler.autocompleteWindow:writeline(suggestion)
         end
-
+    
         bufferHandler.suggestions = suggestions
         bufferHandler.autocompleteWindow:show()
-
+    
         return bufferHandler.autocompleteWindow
     end
+    
+    
 
     -- Function to get autocomplete suggestions
     function bufferHandler:getAutocompleteSuggestions(prefix)
