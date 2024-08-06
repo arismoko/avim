@@ -91,7 +91,8 @@ local function init(components)
         local fileContent = file.readAll()  -- Read the entire file content
         file.close()
     
-        local func, syntaxErr = load(fileContent, fileName, "t", {})
+        -- Pass _G as the environment to load the file content
+        local func, syntaxErr = load(fileContent, fileName, "t", _G)
     
         if not func then
             -- Syntax error found
@@ -121,6 +122,7 @@ local function init(components)
             bufferHandler.checkLineForErrors()
         end
     end
+    
     
     -- Function to apply syntax highlighting to a line of text
     local function highlightLine(line)
