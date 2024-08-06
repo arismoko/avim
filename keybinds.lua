@@ -1,317 +1,908 @@
-local KeyHandler = require("KeyHandler"):getInstance()
-local CommandHandler = require("CommandHandler"):getInstance()
+local InputHandler = require("InputHandler"):getInstance()
 local bufferHandler = require("BufferHandler"):getInstance()
+local View = require("View"):getInstance()
 
--- === Normal and Visual Mode Keybindings ===
+--=== HELPER FUNCTIONS ===
+local function scrollPage(bufferHandler, linesToScroll)
+    -- Calculate the new scroll offset
+    bufferHandler.scrollOffset = math.max(0, math.min(bufferHandler.scrollOffset + linesToScroll, #bufferHandler.buffer - SCREENHEIGHT))
 
--- Basic Navigation
-KeyHandler:map({"n", "v"}, "h", function()
-    CommandHandler:execute("move_left")
+    -- Adjust the cursor position based on the scroll direction
+    if linesToScroll > 0 then
+        -- Scrolling down
+        bufferHandler.cursorY = math.min(#bufferHandler.buffer, bufferHandler.cursorY + linesToScroll)
+    else
+        -- Scrolling up
+        bufferHandler.cursorY = math.max(1, bufferHandler.cursorY + linesToScroll)
+    end
+
+    -- Ensure the cursor stays within the visible area
+    bufferHandler.cursorY = math.max(bufferHandler.scrollOffset + 1, math.min(bufferHandler.cursorY, bufferHandler.scrollOffset + SCREENHEIGHT))
+
+    bufferHandler:updateScroll(SCREENHEIGHT)
+end
+
+local function replaceAndMove(bufferHandler, oldPattern, newPattern)
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
+    local startX, endX = line:find(oldPattern, bufferHandler.cursorX)
+    if startX then
+        local newLine = line:sub(1, startX - 1) .. newPattern .. line:sub(endX + 1)
+        bufferHandler.buffer[bufferHandler.cursorY] = newLine
+        bufferHandler.cursorX = startX + #newPattern
+        bufferHandler:updateScroll(SCREENHEIGHT)
+        bufferHandler:updateStatusBar("Replaced '" .. oldPattern .. "' with '" .. newPattern .. "'")
+        return true
+    end
+    return false
+end
+
+local function wrapSearch(bufferHandler, pattern, direction, searchFunc)
+    local lineCount = #bufferHandler.buffer
+    local startY = bufferHandler.lastSearchPosition.y
+    local startX = bufferHandler.lastSearchPosition.x
+
+    local y = startY
+    while true do
+        local line = bufferHandler.buffer[y]
+        local startX, endX = searchFunc(line, (y == startY) and startX or 1)
+
+        if startX then
+            bufferHandler.cursorY = y
+            bufferHandler.cursorX = startX
+            bufferHandler:updateScroll(SCREENHEIGHT)
+            bufferHandler:updateStatusBar("Found '" .. pattern .. "' at line " .. y)
+
+            bufferHandler.lastSearchPosition = { y = y, x = endX + 1 }
+
+            if y == startY and startX <= bufferHandler.cursorX then
+                bufferHandler.lastSearchPosition = { y = startY, x = 1 }
+            end
+
+            return true -- Indicate that a match was found
+        end
+
+        -- Wraparound search
+        if direction == "forward" then
+            y = y + 1
+            if y > lineCount then y = 1 end
+        else
+            y = y - 1
+            if y < 1 then y = lineCount end
+        end
+
+        bufferHandler.lastSearchPosition.x = 1
+
+        if y == startY then
+            break
+        end
+    end
+
+    bufferHandler:updateStatusError("Pattern '" .. pattern .. "' not found")
+    bufferHandler.lastSearchPosition = { y = 1, x = 1 }
+    return false -- Indicate that no match was found
+end
+
+-- Helper function to get the selection range
+local function getSelectionRange(bufferHandler)
+    local startX = math.min(bufferHandler.cursorX, bufferHandler.visualStartX)
+    local startY = math.min(bufferHandler.cursorY, bufferHandler.visualStartY)
+    local endX = math.max(bufferHandler.cursorX, bufferHandler.visualStartX)
+    local endY = math.max(bufferHandler.cursorY, bufferHandler.visualStartY)
+    return startX, startY, endX, endY
+end
+
+-- Helper function to merge lines after deletion or cutting
+local function mergeLines(bufferHandler, startY, endY)
+    if startY ~= endY then
+        bufferHandler.buffer[startY] = bufferHandler.buffer[startY] .. (bufferHandler.buffer[startY + 1] or "")
+        table.remove(bufferHandler.buffer, startY + 1)
+    end
+end
+
+-- Helper function to update the buffer after visual operations
+local function updateBufferAfterVisualOperation(bufferHandler, startX, startY)
+    bufferHandler.cursorX = startX
+    bufferHandler.cursorY = startY
+    InputHandler:map("normal", {"end_visual_mode"}, "end_visual_mode", function()
+        bufferHandler:endVisualMode()
+    end)
+end
+
+-- Helper function to apply a transformation to a visual selection
+local function transformVisualSelection(bufferHandler, transformFunc)
+    local startX, startY, endX, endY = getSelectionRange(bufferHandler)
+    bufferHandler:saveToHistory()
+
+    for y = startY, endY do
+        local line = bufferHandler.buffer[y]
+        if y == startY and y == endY then
+            bufferHandler.buffer[y] = line:sub(1, startX - 1) .. transformFunc(line:sub(startX, endX - 1)) .. line:sub(endX)
+        elseif y == startY then
+            bufferHandler.buffer[y] = line:sub(1, startX - 1) .. transformFunc(line:sub(startX))
+        elseif y == endY then
+            bufferHandler.buffer[y] = transformFunc(line:sub(1, endX - 1)) .. line:sub(endX)
+        else
+            bufferHandler.buffer[y] = transformFunc(line)
+        end
+    end
+
+    updateBufferAfterVisualOperation(bufferHandler, startX, startY)
+end
+
+-- Helper function to move the cursor to the first non-blank character on a line
+local function moveToFirstNonBlank(bufferHandler, lineNumber)
+    local line = bufferHandler.buffer[lineNumber] or ""
+    local firstNonBlankPos = line:find("%S") or 1 -- Find the first non-blank character or default to 1
+    bufferHandler.cursorX = firstNonBlankPos
+end
+
+-- === Command Mappings and Keybindings ===
+
+-- === Basic Navigation ===
+InputHandler:map({"normal", "visual"}, {"h"}, "move_left", function()
+    bufferHandler:markDirty(bufferHandler.cursorY)  
+    bufferHandler.cursorX = math.max(1, bufferHandler.cursorX - 1)
+    bufferHandler:refreshScreen()  
 end, "Move Left")
 
-KeyHandler:map({"n", "v"}, "j", function()
-    CommandHandler:execute("move_down")
-end, "Move Down")
-
-KeyHandler:map({"n", "v"}, "k", function()
-    CommandHandler:execute("move_up")
-end, "Move Up")
-
-KeyHandler:map({"n", "v"}, "l", function()
-    CommandHandler:execute("move_right")
+InputHandler:map({"normal", "visual"}, {"l"}, "move_right", function()
+    bufferHandler:markDirty(bufferHandler.cursorY)  
+    bufferHandler.cursorX = math.min(#bufferHandler.buffer[bufferHandler.cursorY] + 1, bufferHandler.cursorX + 1)
+    bufferHandler:refreshScreen()  
 end, "Move Right")
 
-KeyHandler:map({"n", "v"}, "ctrl + b", function()
-    CommandHandler:execute("page_up")
-end, "Move Page Back")
+InputHandler:map({"normal", "visual"}, {"k"}, "move_up", function()
+    bufferHandler:markDirty(bufferHandler.cursorY)  
+    if bufferHandler.cursorY > 1 then
+        bufferHandler.cursorY = bufferHandler.cursorY - 1
+    end
+    bufferHandler.cursorX = math.min(bufferHandler.cursorX, #bufferHandler.buffer[bufferHandler.cursorY] + 1)
+    bufferHandler:refreshScreen()  
+end, "Move Up")
 
-KeyHandler:map({"n", "v"}, "ctrl + f", function()
-    CommandHandler:execute("page_down")
-end, "Move Page Forward")
+InputHandler:map({"normal", "visual"}, {"j"}, "move_down", function()
+    bufferHandler:markDirty(bufferHandler.cursorY)  
+    if bufferHandler.cursorY < #bufferHandler.buffer then
+        bufferHandler.cursorY = bufferHandler.cursorY + 1
+    end
+    bufferHandler.cursorX = math.min(bufferHandler.cursorX, #bufferHandler.buffer[bufferHandler.cursorY] + 1)
+    bufferHandler:refreshScreen()  
+end, "Move Down")
 
-KeyHandler:map({"n", "v"}, "ctrl + u", function()
-    CommandHandler:execute("half_page_up")
-end, "Move Half Page Up")
+InputHandler:map({"normal", "visual"}, {"ctrl + f"}, "page_down", function()
+    local linesToScroll = SCREENHEIGHT - 2  
+    scrollPage(bufferHandler, linesToScroll)
+end, "Page Down")
 
-KeyHandler:map({"n", "v"}, "ctrl + d", function()
-    CommandHandler:execute("half_page_down")
-end, "Move Half Page Down")
+InputHandler:map({"normal", "visual"}, {"ctrl + b"}, "page_up", function()
+    local linesToScroll = -(SCREENHEIGHT - 2)  
+    scrollPage(bufferHandler, linesToScroll)
+end, "Page Up")
 
--- Cursor movement within the line
-KeyHandler:map({"n", "v"}, "0", function()
-    CommandHandler:execute("move_to_line_start")
-end, "Move to Start of Line")
+InputHandler:map({"normal", "visual"}, {"ctrl + d"}, "half_page_down", function()
+    local linesToScroll = math.floor(SCREENHEIGHT / 2)  
+    scrollPage(bufferHandler, linesToScroll)
+end, "Half Page Down")
 
-KeyHandler:map({"n", "v"}, "shift + six", function()
-    CommandHandler:execute("move_to_first_non_blank")
-end, "Move to First Non-Blank Character")
+InputHandler:map({"normal", "visual"}, {"ctrl + u"}, "half_page_up", function()
+    local linesToScroll = -math.floor(SCREENHEIGHT / 2)  
+    scrollPage(bufferHandler, linesToScroll)
+end, "Half Page Up")
 
-KeyHandler:map({"n", "v"}, "$", function()
-    CommandHandler:execute("move_to_line_end")
-end, "Move to End of Line")
-
--- Word motions
-KeyHandler:map({"n", "v"}, "w", function()
-    CommandHandler:execute("move_word_forward")
-end, "Move to Next Word")
-
-KeyHandler:map({"n", "v"}, "b", function()
-    CommandHandler:execute("move_word_back")
-end, "Move to Previous Word")
-
-KeyHandler:map({"n", "v"}, "e", function()
-    CommandHandler:execute("move_word_end")
-end, "Move to End of Word")
-
--- Paragraph motions
-KeyHandler:map({"n", "v"}, "{", function()
-    CommandHandler:execute("move_paragraph_back")
-end, "Move to Previous Paragraph")
-
-KeyHandler:map({"n", "v"}, "}", function()
-    CommandHandler:execute("move_paragraph_forward")
-end, "Move to Next Paragraph")
-
-KeyHandler:map({"n", "v"}, "t", function()
-    CommandHandler:execute("find_before_character")
-end, "Find Before Character in Line")
-
--- Repeating last character search
-KeyHandler:map({"n", "v"}, "n", function()
-    CommandHandler:execute("repeat_last_search_or_replace")
-end, "Repeat Last Find")
-
-
--- File and Screen Navigation
-KeyHandler:map({"n", "v"}, "g + g", function()
-    CommandHandler:execute("move_to_top")
+-- === File and Screen Navigation ===
+InputHandler:map({"normal", "visual"}, {"g + g"}, "move_to_top", function()
+    bufferHandler.cursorY = 1
+    bufferHandler.cursorX = 1
+    bufferHandler:updateScroll()
 end, "Move to Top")
 
-KeyHandler:map({"n", "v"}, "G", function()
-    CommandHandler:execute("move_to_bottom")
+InputHandler:map({"normal", "visual"}, {"G"}, "move_to_bottom", function()
+    bufferHandler.cursorY = #bufferHandler.buffer
+    bufferHandler.cursorX = 1
+    bufferHandler:updateScroll()
 end, "Move to Bottom")
 
-KeyHandler:map({"n", "v"}, "H", function()
-    CommandHandler:execute("move_to_top_of_screen")
+InputHandler:map({"normal", "visual"}, {"H"}, "move_to_top_of_screen", function()
+    local screenStart = bufferHandler.scrollOffset + 1
+    bufferHandler.cursorY = screenStart
+    bufferHandler.cursorX = 1
+    bufferHandler:updateStatusBar("Moved to top of screen")
 end, "Move to Top of Screen")
 
-KeyHandler:map({"n", "v"}, "M", function()
-    CommandHandler:execute("move_to_middle_of_screen")
+InputHandler:map({"normal", "visual"}, {"M"}, "move_to_middle_of_screen", function()
+    local screenHeight = SCREENHEIGHT
+    local screenMiddle = math.floor(screenHeight / 2)
+    bufferHandler.cursorY = bufferHandler.scrollOffset + screenMiddle
+    bufferHandler.cursorX = 1
+    bufferHandler:updateStatusBar("Moved to middle of screen")
 end, "Move to Middle of Screen")
 
-KeyHandler:map({"n", "v"}, "L", function()
-    CommandHandler:execute("move_to_bottom_of_screen")
+InputHandler:map({"normal", "visual"}, {"L"}, "move_to_bottom_of_screen", function()
+    local screenHeight = SCREENHEIGHT
+    local screenEnd = bufferHandler.scrollOffset + screenHeight - 1
+    bufferHandler.cursorY = screenEnd
+    bufferHandler.cursorX = 1
+    bufferHandler:updateStatusBar("Moved to bottom of screen")
 end, "Move to Bottom of Screen")
 
--- Editing (Normal Mode Only)
-KeyHandler:map("n", "d + d", function()
-    CommandHandler:execute("cut_line")
+-- === Word and Line Motions ===
+InputHandler:map({"normal", "visual"}, {"w"}, "move_word_forward", function()
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
+    local nextSpace = line:find("%s", bufferHandler.cursorX)
+    if nextSpace then
+        bufferHandler.cursorX = nextSpace + 1
+    else
+        bufferHandler.cursorX = #line + 1
+    end
+end, "Move to Next Word")
+
+InputHandler:map({"normal", "visual"}, {"b"}, "move_word_back", function()
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
+    local prevSpace = line:sub(1, bufferHandler.cursorX - 1):find("%s[^%s]*$")
+    if prevSpace then
+        bufferHandler.cursorX = prevSpace
+    else
+        bufferHandler.cursorX = 1
+    end
+end, "Move to Previous Word")
+
+InputHandler:map({"normal", "visual"}, {"e"}, "move_word_end", function()
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
+    
+    -- Find the start of the next word from the current cursor position
+    local nextWordStart = line:find("[^%s]", bufferHandler.cursorX)
+    
+    if nextWordStart then
+        -- Find the end of the word that starts at 'nextWordStart'
+        local nextWordEnd = line:find("%s", nextWordStart)
+        
+        if nextWordEnd then
+            -- Move to the end of the current word
+            bufferHandler.cursorX = nextWordEnd
+        else
+            -- If there is no space after the word, move to the end of the line
+            bufferHandler.cursorX = #line + 1
+        end
+    else
+        -- If no more words are found, move to the end of the line
+        bufferHandler.cursorX = #line + 1
+    end
+end, "Move to End of Word")
+
+InputHandler:map({"normal", "visual"}, {"0"}, "move_to_line_start", function()
+    bufferHandler.cursorX = 1
+end, "Move to Start of Line")
+
+InputHandler:map({"normal", "visual"}, {"^"}, "move_to_first_non_blank", function()
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
+    local firstNonBlank = line:find("%S")
+    if firstNonBlank then
+        bufferHandler.cursorX = firstNonBlank
+    else
+        bufferHandler.cursorX = 1
+    end
+end, "Move to First Non-Blank Character")
+
+InputHandler:map({"normal", "visual"}, {"$"}, "move_to_line_end", function()
+    bufferHandler.cursorX = #bufferHandler.buffer[bufferHandler.cursorY] + 1
+end, "Move to End of Line")
+
+-- === Editing ===
+InputHandler:map({"normal"}, {"d + d"}, "cut_line", function(isRepeated)
+    local lineToCut = bufferHandler.buffer[bufferHandler.cursorY]
+    if isRepeated then
+        bufferHandler.yankRegister = bufferHandler.yankRegister .. "\n" .. lineToCut
+    else
+        bufferHandler.yankRegister = lineToCut
+    end
+
+    -- Remove the line from the buffer
+    table.remove(bufferHandler.buffer, bufferHandler.cursorY)
+
+    -- Adjust cursor position
+    if bufferHandler.cursorY > #bufferHandler.buffer then
+        bufferHandler.cursorY = #bufferHandler.buffer
+    end
+
+    if bufferHandler.cursorY == 0 then
+        table.insert(bufferHandler.buffer, "")
+        bufferHandler.cursorY = 1
+    end
+
+    -- Mark the entire buffer as dirty
+    for i = 1, #bufferHandler.buffer do
+        bufferHandler:markDirty(i)
+    end
+
+    bufferHandler:updateStatusBar("Cut line")
+    bufferHandler:refreshScreen()
 end, "Cut Line")
 
-KeyHandler:map("n", "d + w", function()
-    CommandHandler:execute("delete_word")
+InputHandler:map({"normal"}, {"d + w"}, "delete_word", function()
+    bufferHandler:saveToHistory()
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
+    local nextSpace = line:find("%s", bufferHandler.cursorX)
+    if nextSpace then
+        line = line:sub(1, bufferHandler.cursorX - 1) .. line:sub(nextSpace + 1)
+    else
+        line = line:sub(1, bufferHandler.cursorX - 1)
+    end
+    bufferHandler.buffer[bufferHandler.cursorY] = line
+    bufferHandler:markDirty(bufferHandler.cursorY)
+    bufferHandler:updateStatusBar("Deleted word")
 end, "Delete Word")
 
-KeyHandler:map("n", "c + c", function()
-    CommandHandler:execute("change_line")
-end, "Change Line")
-
-KeyHandler:map("n", "c + w", function()
-    CommandHandler:execute("change_word")
+InputHandler:map({"normal"}, {"c + w^"}, "change_word", function()
+    bufferHandler:saveToHistory()
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
+    local nextSpace = line:find("%s", bufferHandler.cursorX)
+    if nextSpace then
+        line = line:sub(1, bufferHandler.cursorX - 1) .. line:sub(nextSpace + 1)
+    else
+        line = line:sub(1, bufferHandler.cursorX - 1)
+    end
+    bufferHandler.buffer[bufferHandler.cursorY] = line
+    bufferHandler:markDirty(bufferHandler.cursorY)
+    bufferHandler:switchMode("insert")
 end, "Change Word")
 
-KeyHandler:map("n", "Y", function()
-    CommandHandler:execute("yank_line")
+InputHandler:map({"normal"}, {"y + y"}, "yank_line", function(isRepeated)
+    -- Save the original cursor position
+    local originalCursorY = bufferHandler.cursorY
+
+    if isRepeated then
+        bufferHandler.yankRegister = bufferHandler.yankRegister .. "\n" .. bufferHandler.buffer[bufferHandler.cursorY]
+    else
+        bufferHandler.yankRegister = bufferHandler.buffer[bufferHandler.cursorY]
+    end
+
+    bufferHandler:updateStatusBar("Yanked line")
+
+    -- Move the cursor down after yanking the line
+    if bufferHandler.cursorY < #bufferHandler.buffer then
+        bufferHandler.cursorY = bufferHandler.cursorY + 1
+    end
+
+    -- If this is the final repetition, move the cursor back to the original position
+    if not isRepeated then
+        bufferHandler.cursorY = originalCursorY
+    end
+
+    -- Refresh the screen to reflect the cursor movement
+    bufferHandler:refreshScreen()
 end, "Yank Line")
 
-KeyHandler:map({"n", "v"}, "x", function()
-    CommandHandler:execute("delete_char")
+InputHandler:map({"normal", "visual"}, {"x"}, "delete_char", function()
+    bufferHandler:saveToHistory()
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
+    if bufferHandler.cursorX <= #line then
+        bufferHandler.buffer[bufferHandler.cursorY] = line:sub(1, bufferHandler.cursorX - 1) .. line:sub(bufferHandler.cursorX + 1)
+        bufferHandler:markDirty(bufferHandler.cursorY)
+        bufferHandler:updateStatusBar("Deleted character")
+    else
+        bufferHandler:updateStatusError("Nothing to delete")
+    end
 end, "Delete Char")
 
-KeyHandler:map({"n", "v"}, "X", function()
-    CommandHandler:execute("delete_char_before")
+InputHandler:map({"normal", "visual"}, {"X"}, "delete_char_before", function()
+    bufferHandler:saveToHistory()
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
+    if bufferHandler.cursorX > 1 then
+        bufferHandler.buffer[bufferHandler.cursorY] = line:sub(1, bufferHandler.cursorX - 2) .. line:sub(bufferHandler.cursorX)
+        bufferHandler.cursorX = bufferHandler.cursorX - 1
+        bufferHandler:markDirty(bufferHandler.cursorY)
+        bufferHandler:updateStatusBar("Deleted character")
+    else
+        bufferHandler:updateStatusError("Nothing to delete")
+    end
 end, "Delete Char Before")
 
-KeyHandler:map("n", "p", function()
-    CommandHandler:execute("paste")
+InputHandler:map({"normal"}, {"p"}, "paste", function()
+    bufferHandler:paste()
+    bufferHandler:updateStatusBar("Pasted text")
 end, "Paste")
 
-KeyHandler:map("n", "u", function()
-    CommandHandler:execute("undo")
+InputHandler:map({"normal"}, {"u"}, "undo", function()
+    bufferHandler:undo()
 end, "Undo")
 
-KeyHandler:map("n", "ctrl + r", function()
-    CommandHandler:execute("redo")
+InputHandler:map({"normal"}, {"ctrl + r"}, "redo", function()
+    bufferHandler:redo()
 end, "Redo")
 
-KeyHandler:map("n", "ctrl + v", function()
-    CommandHandler:execute("paste_clipboard")
+InputHandler:map({"normal"}, {"ctrl + v"}, "paste_clipboard", function()
+    local event, clipboardText = os.pullEvent("paste")
+    if clipboardText then
+        bufferHandler:saveToHistory()
+        bufferHandler:insertTextAtCursor(clipboardText)
+        bufferHandler:updateScroll(SCREENHEIGHT)
+        bufferHandler:refreshScreen()
+        bufferHandler:updateStatusBar("Pasted text from clipboard")
+    else
+        bufferHandler:updateStatusError("No text in clipboard or paste operation failed")
+    end
 end, "Paste Clipboard")
 
--- Mode Switching (Normal Mode Only)
-KeyHandler:map("n", "i^", function()
-    CommandHandler:execute("enter_insert_mode")
-end, "Enter Insert Mode on Key Release")
+-- === Mode Switching ===
+InputHandler:map({"normal"}, {"i^"}, "enter_insert_mode", function()
+    bufferHandler:switchMode("insert")
+end, "Enter Insert Mode")
 
-KeyHandler:map("n", "a^", function()
-    CommandHandler:execute("append_to_line")
-end, "Append to Line on Key Release")
+InputHandler:map({"normal"}, {"a^"}, "append_to_line", function()
+    bufferHandler.cursorX = math.min(bufferHandler.cursorX + 1, #bufferHandler.buffer[bufferHandler.cursorY] + 1)
+    bufferHandler:switchMode("insert")
+end, "Append to Line")
 
-KeyHandler:map("n", "shift + a^", function()
-    CommandHandler:execute("append_to_line_end")
+InputHandler:map({"normal"}, {"shift + a^"}, "append_to_line_end", function()
+    bufferHandler.cursorX = #bufferHandler.buffer[bufferHandler.cursorY] + 1
+    bufferHandler:switchMode("insert")
 end, "Append to Line End")
 
-KeyHandler:map("n", "I^", function()
-    CommandHandler:execute("insert_at_line_start")
-end, "Insert at Line Start on Key Release")
+InputHandler:map({"normal"}, {"shift + i^"}, "insert_at_line_start", function()
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
+    local firstNonBlank = line:find("%S")
+    if firstNonBlank then
+        bufferHandler.cursorX = firstNonBlank
+    else
+        bufferHandler.cursorX = 1
+    end
+    bufferHandler:switchMode("insert")
+end, "Insert at Line Start")
 
-KeyHandler:map("n", "o^", function()
-    CommandHandler:execute("open_line_below")
-end, "Open Line Below on Key Release")
+InputHandler:map({"normal"}, {"o^"}, "open_line_below", function()
+    local line = bufferHandler.cursorY
+    table.insert(bufferHandler.buffer, line + 1, "")
+    bufferHandler.cursorY = line + 1
+    bufferHandler.cursorX = 1
+    bufferHandler:switchMode("insert")
+end, "Open Line Below")
 
-KeyHandler:map("n", "shift + o^", function()
-    CommandHandler:execute("open_line_above")
-end, "Open Line Above on Key Release")
+InputHandler:map({"normal"}, {"shift + o^"}, "open_line_above", function()
+    local line = bufferHandler.cursorY
+    table.insert(bufferHandler.buffer, line, "")
+    bufferHandler.cursorY = line
+    bufferHandler.cursorX = 1
+    bufferHandler:switchMode("insert")
+end, "Open Line Above")
 
-KeyHandler:map("n", "s^", function()
-    CommandHandler:execute("delete_char_and_insert")
+InputHandler:map({"normal"}, {"s^"}, "delete_char_and_insert", function()
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
+
+    -- If cursor is beyond the line length, there's nothing to delete
+    if bufferHandler.cursorX > #line then
+        bufferHandler:updateStatusError("Nothing to delete at the current cursor position")
+        return
+    end
+
+    -- Save current state for undo
+    bufferHandler:saveToHistory()
+
+    -- Delete the character at the cursor position
+    bufferHandler.buffer[bufferHandler.cursorY] = line:sub(1, bufferHandler.cursorX - 1) .. line:sub(bufferHandler.cursorX + 1)
+
+    -- Refresh the screen and move to insert mode
+    bufferHandler:refreshScreen()
+    bufferHandler:switchMode("insert")
 end, "Substitute Char")
 
-KeyHandler:map("n", "shift + s^", function()
-    CommandHandler:execute("delete_line_and_insert")
+InputHandler:map({"normal"}, {"shift + s^"}, "delete_line_and_insert", function()
+    -- Save current state for undo
+    bufferHandler:saveToHistory()
+
+    -- Delete the entire line where the cursor is
+    table.remove(bufferHandler.buffer, bufferHandler.cursorY)
+
+    -- If we removed the last line, add an empty line
+    if #bufferHandler.buffer == 0 then
+        table.insert(bufferHandler.buffer, "")
+    end
+
+    -- Move the cursor to the start of the new line
+    bufferHandler.cursorX = 1
+
+    -- Ensure cursorY is within the bounds of the buffer
+    if bufferHandler.cursorY > #bufferHandler.buffer then
+        bufferHandler.cursorY = #bufferHandler.buffer
+    end
+
+    -- Refresh the screen and move to insert mode
+    bufferHandler:refreshScreen()
+    bufferHandler:switchMode("insert")
 end, "Substitute Line")
-KeyHandler:map("n", "shift + c^", function()
-    CommandHandler:execute("delete_until_end_of_line_and_insert")
+
+InputHandler:map({"normal"}, {"shift + c^"}, "delete_until_end_of_line_and_insert", function()
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
+
+    -- If the cursor is already at the end of the line, there's nothing to delete
+    if bufferHandler.cursorX > #line then
+        bufferHandler:updateStatusError("Cursor is already at the end of the line")
+        bufferHandler:switchMode("insert")
+        return
+    end
+
+    -- Save current state for undo
+    bufferHandler:saveToHistory()
+
+    -- Delete from the cursor position to the end of the line
+    bufferHandler.buffer[bufferHandler.cursorY] = line:sub(1, bufferHandler.cursorX - 1)
+
+    -- Refresh the screen and move to insert mode
+    bufferHandler:refreshScreen()
+    bufferHandler:switchMode("insert")
 end, "Change to Line End")
-KeyHandler:map("n", {":","shift+semiColon"}, function()
-    CommandHandler:execute("enter_command_mode")
+
+InputHandler:map({"normal"}, {":", "shift + ;"}, "enter_command_mode", function()
+    bufferHandler:switchMode("command")
 end, "Enter Command Mode")
 
-KeyHandler:map("n", "v", function()
-    CommandHandler:execute("enter_visual_mode")
+InputHandler:map({"normal"}, {"v"}, "enter_visual_mode", function()
+    bufferHandler:startVisualMode()
 end, "Enter Visual Mode")
 
-KeyHandler:map("n", "f9", function()
-    CommandHandler:execute("exit_editor")
+InputHandler:map({"normal"}, {"f9"}, "exit_editor", function()
+    bufferHandler.shouldExit = true
 end, "Exit Editor")
 
-KeyHandler:map("n", "ctrl + g", function()
-    bufferHandler:switchMode("command", "goto_line ")
-end, "Save File")
+InputHandler:map({"normal"}, {"ctrl + g"}, "goto_line", function(lineNumber)
+    lineNumber = tonumber(lineNumber)
+    if not lineNumber or lineNumber < 1 or lineNumber > #bufferHandler.buffer then
+        bufferHandler:updateStatusError("Invalid line number: " .. (lineNumber or ""))
+        return
+    end
+    bufferHandler.cursorY = lineNumber
+    bufferHandler.cursorX = 1
+    bufferHandler:updateScroll(SCREENHEIGHT)
+    bufferHandler:updateStatusBar("Moved to line " .. lineNumber)
+end, "Go to Line")
 
--- Search and Replace
-KeyHandler:map("n", "/", function()
-    bufferHandler:switchMode("command", "search ")   
+-- === Search and Replace ===
+InputHandler:map({"normal"}, {"/"}, "search", function(pattern, direction)
+    if not pattern then
+        pattern = bufferHandler.lastSearchPattern
+        if not pattern then
+            bufferHandler:updateStatusError("No previous search pattern to repeat")
+            return
+        end
+    else
+        bufferHandler.lastSearchPattern = pattern
+        bufferHandler.lastSearchPosition = { y = bufferHandler.cursorY, x = bufferHandler.cursorX + 1 }
+    end
+
+    direction = direction or "forward"
+
+    local searchFunc = function(line, startPos)
+        return line:find(pattern, startPos)
+    end
+
+    wrapSearch(bufferHandler, pattern, direction, searchFunc)
 end, "Search")
 
-KeyHandler:map("n", "?", function()
-    bufferHandler:switchMode("command", "replace ")   
+InputHandler:map({"normal"}, {"?"}, "replace", function(oldPattern, newPattern, direction)
+    if not oldPattern or not newPattern then
+        bufferHandler:updateStatusError("Usage: :replace <old> <new>")
+        return
+    end
+
+    bufferHandler.lastReplacePattern = oldPattern
+    bufferHandler.replaceWithPattern = newPattern
+    bufferHandler.lastReplacePosition = { y = bufferHandler.cursorY, x = bufferHandler.cursorX + 1 }
+
+    direction = direction or "forward"
+
+    local searchFunc = function(line, startPos)
+        return line:find(oldPattern, startPos)
+    end
+
+    local found = wrapSearch(bufferHandler, oldPattern, direction, searchFunc)
+    if found then
+        replaceAndMove(bufferHandler, oldPattern, newPattern)
+    end
 end, "Replace")
 
-KeyHandler:map("n", "ctrl + /", function()
-    bufferHandler:switchMode("command", "replace_all ")
+InputHandler:map({"normal"}, {"."}, "repeat_last_search_or_replace", function()
+    if bufferHandler.lastSearchPattern then
+        -- Reuse the existing search logic
+        InputHandler:execute("search", bufferHandler.lastSearchPattern)
+    elseif bufferHandler.lastReplacePattern and bufferHandler.replaceWithPattern then
+        -- Reuse the existing replace logic
+        InputHandler:execute("replace", bufferHandler.lastReplacePattern, bufferHandler.replaceWithPattern)
+    else
+        bufferHandler:updateStatusError("No previous search or replace operation to repeat")
+    end
+end, "Repeat Last Search or Replace")
+
+InputHandler:map({"normal"}, {"ctrl + /"}, "replace_all", function(oldPattern, newPattern)
+    if not oldPattern or not newPattern then
+        bufferHandler:updateStatusError("Usage: :replace_all <old> <new>")
+        return
+    end
+
+    local replacements = 0
+
+    for y, line in ipairs(bufferHandler.buffer) do
+        local newLine, count = line:gsub(oldPattern, newPattern)
+        if count > 0 then
+            bufferHandler.buffer[y] = newLine
+            replacements = replacements + count
+        end
+    end
+
+    if replacements > 0 then
+        bufferHandler:updateScroll(SCREENHEIGHT)
+        bufferHandler:updateStatusBar("Replaced " .. replacements .. " occurrence(s) of '" .. oldPattern .. "' with '" .. newPattern .. "'")
+    else
+        bufferHandler:updateStatusError("No occurrences of '" .. oldPattern .. "' found")
+    end
 end, "Replace All")
 
-KeyHandler:map("n", ".", function()
-    bufferHandler:switchMode("command", nil, true)
-end, "Execute previous command")
+-- === Miscellaneous ===
+InputHandler:map({"normal"}, {"qa"}, "exit_editor", function()
+    bufferHandler.shouldExit = true
+end, "Quit All")
 
--- === Visual Mode Specific Keybindings ===
+InputHandler:map({"normal"}, {"w"}, "save_file", function()
+    bufferHandler:saveFile()
+end, "Save File")
 
--- Editing
-KeyHandler:map("v", "y", function()
-    CommandHandler:execute("yank_visual_selection")
-    CommandHandler:execute("end_visual_mode")
-end, "Yank Visual Selection and End Visual Mode")
+InputHandler:map({"normal"}, {"f3"}, "show_keybindings", function()
+    local descriptions = InputHandler:getKeyDescriptions(bufferHandler.mode)
+    local keybindsWindow = View:createWindow(1, 1, SCREENWIDTH, SCREENHEIGHT - 1, colors.lightGray, colors.black)
 
-KeyHandler:map("v", "x", function()
-    CommandHandler:execute("delete_visual_selection")
-    CommandHandler:execute("end_visual_mode")
-end, "Delete Visual Selection and End Visual Mode")
+    local startIndex = 1
+    local itemsPerPage = keybindsWindow.height - 2
 
-KeyHandler:map("v", "c", function()
-    CommandHandler:execute("change_visual_selection")
-    CommandHandler:execute("end_visual_mode")
-end, "Change Visual Selection and End Visual Mode")
+    local function displayKeybindings(startIndex)
+        keybindsWindow:clear()
+        keybindsWindow:print("Keybindings for " .. bufferHandler.mode:upper() .. " Mode:")
+        for i = startIndex, math.min(#descriptions, startIndex + itemsPerPage - 1) do
+            local desc = descriptions[i]
+            keybindsWindow:writeline("  " .. desc.combo .. (desc.description ~= "" and ": " .. desc.description or ""))
+        end
+        keybindsWindow:show()
+    end
 
-KeyHandler:map("v", "d", function()
-    CommandHandler:execute("cut_visual_selection")
-    CommandHandler:execute("end_visual_mode")
-end, "Cut Visual Selection and End Visual Mode")
+    displayKeybindings(startIndex)
 
-KeyHandler:map({"n","v"}, "<", function()
-    CommandHandler:execute("unindent")
-end, "Unindent Visual Selection")
-
-KeyHandler:map({"n","v"}, ">", function()
-    CommandHandler:execute("indent")
-end, "Indent Visual Selection")
-
-KeyHandler:map("v", "U", function()
-    CommandHandler:execute("uppercase_visual_selection")
-end, "Uppercase Visual Selection")
-
-KeyHandler:map("v", "u", function()
-    CommandHandler:execute("lowercase_visual_selection")
-end, "Lowercase Visual Selection")
-
-KeyHandler:map("v", "J", function()
-    CommandHandler:execute("join_visual_selection")
-end, "Join Visual Selection")
-
-KeyHandler:map("v", "~", function()
-    CommandHandler:execute("swap_case_visual_selection")
-end, "Swap Case of Visual Selection")
-
--- Mode Switching
-KeyHandler:map("v", "f1", function()
-    CommandHandler:execute("end_visual_mode")
-end, "End Visual Mode")
-
-KeyHandler:map("v", "v", function()
-    CommandHandler:execute("end_visual_mode")
-end, "End Visual Mode")
-
--- === Insert Mode Keybindings ===
-
-KeyHandler:map("i", "f1", function()
-    CommandHandler:execute("insert_exit_to_normal")
-end, "Exit to Normal Mode")
-
-KeyHandler:map("i", "left", function()
-    CommandHandler:execute("move_left")
-end, "Move Left")
-
-KeyHandler:map("i", "right", function()
-    CommandHandler:execute("move_right")
-end, "Move Right")
-
-KeyHandler:map("i", "up", function()
-    CommandHandler:execute("move_up")
-end, "Move Up")
-
-KeyHandler:map("i", "down", function()
-    CommandHandler:execute("move_down")
-end, "Move Down")
-
-KeyHandler:map("i", "tab", function()
-    CommandHandler:execute("insert_tab")
-end, "Insert Tab or Select Autocomplete")
-
-KeyHandler:map("i", "enter", function()
-    CommandHandler:execute("insert_enter")
-end, "Insert New Line or Select Autocomplete")
-
-KeyHandler:map("i", "backspace", function()
-    CommandHandler:execute("insert_backspace")
-end, "Backspace or Close Autocomplete")
-
--- === Miscellaneous Keybindings ===
-
-KeyHandler:map({"n", "v", "i"}, "f3", function()
-    CommandHandler:execute("show_keybindings")
+    while true do
+        local event, key = os.pullEvent("key")
+        if key == keys.down or key == keys.j then
+            if startIndex + itemsPerPage - 1 < #descriptions then
+                startIndex = startIndex + 1
+                displayKeybindings(startIndex)
+            end
+        elseif key == keys.up or key == keys.k then
+            if startIndex > 1 then
+                startIndex = startIndex - 1
+                displayKeybindings(startIndex)
+            end
+        elseif key == keys.q then
+            keybindsWindow:close()
+            break
+        end
+    end
 end, "Show Keybindings")
 
-KeyHandler:map({"n", "v", "i"}, "f4", function()
-    CommandHandler:execute("close_windows")
+InputHandler:map({"normal", "visual", "insert"}, {"f4"}, "close_windows", function()
+    View:closeAllWindows()
 end, "Close Windows")
+
+-- === Insert Mode Keybindings ===
+InputHandler:map({"insert"}, {"f1"}, "insert_exit_to_normal", function()
+    bufferHandler:switchMode("normal")
+end, "Exit to Normal Mode")
+
+InputHandler:map({"insert"}, {"left"}, "move_left", function()
+    bufferHandler:markDirty(bufferHandler.cursorY)
+    bufferHandler.cursorX = math.max(1, bufferHandler.cursorX - 1)
+    bufferHandler:refreshScreen()
+end, "Move Left")
+
+InputHandler:map({"insert"}, {"right"}, "move_right", function()
+    bufferHandler:markDirty(bufferHandler.cursorY)
+    bufferHandler.cursorX = math.min(#bufferHandler.buffer[bufferHandler.cursorY] + 1, bufferHandler.cursorX + 1)
+    bufferHandler:refreshScreen()
+end, "Move Right")
+
+InputHandler:map({"insert"}, {"up"}, "move_up", function()
+    bufferHandler:markDirty(bufferHandler.cursorY)
+    if bufferHandler.cursorY > 1 then
+        bufferHandler.cursorY = bufferHandler.cursorY - 1
+    end
+    bufferHandler.cursorX = math.min(bufferHandler.cursorX, #bufferHandler.buffer[bufferHandler.cursorY] + 1)
+    bufferHandler:refreshScreen()
+end, "Move Up")
+
+InputHandler:map({"insert"}, {"down"}, "move_down", function()
+    bufferHandler:markDirty(bufferHandler.cursorY)
+    if bufferHandler.cursorY < #bufferHandler.buffer then
+        bufferHandler.cursorY = bufferHandler.cursorY + 1
+    end
+    bufferHandler.cursorX = math.min(bufferHandler.cursorX, #bufferHandler.buffer[bufferHandler.cursorY] + 1)
+    bufferHandler:refreshScreen()
+end, "Move Down")
+
+InputHandler:map({"insert"}, {"tab"}, "insert_tab", function()
+    bufferHandler:insertChar("    ")
+    View:drawLine(bufferHandler.cursorY - bufferHandler.scrollOffset)
+end, "Insert Tab")
+
+InputHandler:map({"insert"}, {"enter"}, "insert_enter", function()
+    bufferHandler:enter()
+end, "Insert New Line")
+
+InputHandler:map({"insert"}, {"backspace"}, "insert_backspace", function()
+    bufferHandler:backspace()
+end, "Backspace")
+
+-- === Visual Mode Keybindings ===
+InputHandler:map({"visual"}, {"y"}, "yank_visual_selection", function()
+    bufferHandler:yankSelection()
+    InputHandler:execute("end_visual_mode")
+end, "Yank Visual Selection and Exit Visual Mode")
+
+InputHandler:map({"visual"}, {"x"}, "delete_visual_selection", function()
+    if not bufferHandler.visualStartX or not bufferHandler.visualStartY then
+        bufferHandler:updateStatusError("No selection to delete")
+        return
+    end
+
+    local startX, startY, endX, endY = getSelectionRange(bufferHandler)
+
+    bufferHandler:saveToHistory()
+
+    for y = startY, endY do
+        local line = bufferHandler.buffer[y]
+        if y == startY and y == endY then
+            bufferHandler.buffer[y] = line:sub(1, startX - 1) .. line:sub(endX)
+        elseif y == startY then
+            bufferHandler.buffer[y] = line:sub(1, startX - 1)
+        elseif y == endY then
+            bufferHandler.buffer[y] = line:sub(endX)
+        else
+            bufferHandler.buffer[y] = ""
+        end
+    end
+
+    mergeLines(bufferHandler, startY, endY)
+    updateBufferAfterVisualOperation(bufferHandler, startX, startY)
+
+    bufferHandler:updateStatusBar("Deleted visual selection")
+    InputHandler:execute("end_visual_mode")
+end, "Delete Visual Selection and Exit Visual Mode")
+
+InputHandler:map({"visual"}, {"c^"}, "change_visual_selection", function()
+    InputHandler:execute("delete_visual_selection")
+    bufferHandler:switchMode("insert")
+end, "Change Visual Selection")
+
+InputHandler:map({"visual"}, {"d"}, "cut_visual_selection", function()
+    if not bufferHandler.visualStartX or not bufferHandler.visualStartY then
+        bufferHandler:updateStatusError("No selection to cut")
+        return
+    end
+
+    local startX, startY, endX, endY = getSelectionRange(bufferHandler)
+
+    bufferHandler:saveToHistory()
+    bufferHandler.yankRegister = ""
+
+    for y = startY, endY do
+        local line = bufferHandler.buffer[y]
+        if y == startY and y == endY then
+            bufferHandler.yankRegister = line:sub(startX, endX - 1)
+            bufferHandler.buffer[y] = line:sub(1, startX - 1) .. line:sub(endX)
+        elseif y == startY then
+            bufferHandler.yankRegister = line:sub(startX) .. "\n"
+            bufferHandler.buffer[y] = line:sub(1, startX - 1)
+        elseif y == endY then
+            bufferHandler.yankRegister = bufferHandler.yankRegister .. line:sub(1, endX - 1)
+            bufferHandler.buffer[y] = line:sub(endX)
+        else
+            bufferHandler.yankRegister = bufferHandler.yankRegister .. line .. "\n"
+            bufferHandler.buffer[y] = ""
+        end
+    end
+
+    mergeLines(bufferHandler, startY, endY)
+    updateBufferAfterVisualOperation(bufferHandler, startX, startY)
+
+    bufferHandler:updateStatusBar("Cut visual selection")
+    InputHandler:execute("end_visual_mode")
+end, "Cut Visual Selection and Exit Visual Mode")
+
+InputHandler:map({"visual"}, {"<"}, "unindent", function()
+    local function unindentLine(line)
+        return line:sub(1, 1) == " " and line:sub(2) or line
+    end
+
+    bufferHandler:saveToHistory()
+
+    bufferHandler.cursorX = 1
+    local line = bufferHandler.buffer[bufferHandler.cursorY]
+    if line:match("^%s") then
+        bufferHandler.buffer[bufferHandler.cursorY] = unindentLine(line)
+        moveToFirstNonBlank(bufferHandler, bufferHandler.cursorY)
+        View:drawLine(bufferHandler.cursorY - bufferHandler.scrollOffset)
+    end
+
+    if bufferHandler.cursorY < #bufferHandler.buffer then
+        bufferHandler.cursorY = bufferHandler.cursorY + 1
+    end
+
+    bufferHandler:updateStatusBar("Unindented line(s)")
+    bufferHandler:refreshScreen()
+end, "Unindent Visual Selection")
+
+InputHandler:map({"visual"}, {">"}, "indent", function()
+    local function indentLine(line)
+        return " " .. line
+    end
+
+    bufferHandler:saveToHistory()
+
+    bufferHandler.cursorX = 1
+    bufferHandler.buffer[bufferHandler.cursorY] = indentLine(bufferHandler.buffer[bufferHandler.cursorY])
+    moveToFirstNonBlank(bufferHandler, bufferHandler.cursorY)
+    View:drawLine(bufferHandler.cursorY - bufferHandler.scrollOffset)
+
+    if bufferHandler.cursorY < #bufferHandler.buffer then
+        bufferHandler.cursorY = bufferHandler.cursorY + 1
+    end
+
+    bufferHandler:updateStatusBar("Indented line(s)")
+    bufferHandler:refreshScreen()
+end, "Indent Visual Selection")
+
+InputHandler:map({"visual"}, {"U"}, "uppercase_visual_selection", function()
+    transformVisualSelection(bufferHandler, string.upper)
+    bufferHandler:updateStatusBar("Uppercased visual selection")
+end, "Uppercase Visual Selection")
+
+InputHandler:map({"visual"}, {"u"}, "lowercase_visual_selection", function()
+    transformVisualSelection(bufferHandler, string.lower)
+    bufferHandler:updateStatusBar("Lowercased visual selection")
+end, "Lowercase Visual Selection")
+
+InputHandler:map({"visual"}, {"J"}, "join_visual_selection", function()
+    if not bufferHandler.visualStartX or not bufferHandler.visualStartY then
+        bufferHandler:updateStatusError("No selection to join")
+        return
+    end
+
+    local startX, startY, endX, endY = getSelectionRange(bufferHandler)
+
+    bufferHandler:saveToHistory()
+
+    local joinedLine = ""
+    for y = startY, endY do
+        joinedLine = joinedLine .. bufferHandler.buffer[y]:gsub("%s+$", "")
+        bufferHandler.buffer[y] = ""
+    end
+
+    bufferHandler.buffer[startY] = joinedLine
+    bufferHandler.cursorY = startY
+    bufferHandler.cursorX = #joinedLine + 1
+
+    for y = startY + 1, endY do
+        table.remove(bufferHandler.buffer, startY + 1)
+    end
+
+    updateBufferAfterVisualOperation(bufferHandler, startX, startY)
+    bufferHandler:updateStatusBar("Joined lines")
+end, "Join Visual Selection")
+
+InputHandler:map({"visual"}, {"~"}, "swap_case_visual_selection", function()
+    bufferHandler:saveToHistory()
+    local function swapCase(text)
+        return text:gsub(".", function(c)
+            return c:match("%l") and c:upper() or c:lower()
+        end)
+    end
+
+    transformVisualSelection(bufferHandler, swapCase)
+    bufferHandler:updateStatusBar("Swapped case of visual selection")
+end, "Swap Case of Visual Selection")
+
+InputHandler:map({"visual"}, {"v"}, "end_visual_mode", function()
+    bufferHandler:endVisualMode()
+end, "End Visual Mode")

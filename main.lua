@@ -4,8 +4,7 @@ SCREENWIDTH, SCREENHEIGHT = term.getSize()
 -- Load core components
 local View = require("View"):getInstance()
 local bufferHandler = require("BufferHandler"):getInstance()
-local KeyHandler = require("KeyHandler"):getInstance()
-local CommandHandler = require("CommandHandler"):getInstance()
+local InputHandler = require("InputHandler"):getInstance()
 
 -- Plugin management
 local pluginConfigFile = "plugins/pluginConfig.lua"
@@ -37,10 +36,9 @@ local function loadPlugin(pluginName)
             local plugin = require("plugins." .. pluginName .. ".plugin")
             if plugin and plugin.init then
                 plugin.init({
-                    View = View,
+                    view = View,
                     bufferHandler = bufferHandler,
-                    KeyHandler = KeyHandler,
-                    CommandHandler = CommandHandler
+                    inputHandler = InputHandler
                 })
             else
                 error("Plugin " .. pluginName .. " is missing an init function.")
@@ -148,7 +146,7 @@ end
 local function eventLoop()
     View:drawScreen()
     while not bufferHandler.shouldExit do
-        KeyHandler:handleInputEvent(bufferHandler.mode, bufferHandler, View, CommandHandler)
+        InputHandler:handleInputEvent(bufferHandler.mode, bufferHandler, View )
         View:drawScreen()
         View:updateCursor()
     end
@@ -199,7 +197,6 @@ end
 
 -- Load core components and plugins
 require("keybinds")
-require("commands")
 loadPluginConfig()
 loadPlugins()
 

@@ -456,7 +456,7 @@ function BufferHandler:switchMode(mode, initialCommand, autoExecute)
     end
 
     -- Reset key sequence and other state variables to default
-    local keyHandler = require("KeyHandler"):getInstance()
+    local keyHandler = require("InputHandler"):getInstance()
     keyHandler:resetKeySequence()
 
     -- Additional resets can be added here if needed
@@ -464,9 +464,9 @@ function BufferHandler:switchMode(mode, initialCommand, autoExecute)
 
     local view = getView()
     if mode == "command" then
-        local commandHandler = require("CommandHandler"):getInstance()
+        local inputHandler = require("InputHandler"):getInstance()
         -- Pass initialCommand and autoExecute, even if initialCommand is nil
-        commandHandler:handleCommandInput(self, view, initialCommand, autoExecute)
+        inputHandler:handleCommandInput(self, view, initialCommand, autoExecute)
     end
     self:refreshScreen()
 end

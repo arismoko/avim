@@ -1,13 +1,13 @@
 local function init(components)
-    local View = components.View
+    local View = components.view
     local bufferHandler = components.bufferHandler
-    local KeyHandler = components.KeyHandler
-    local CommandHandler = components.CommandHandler
+    local InputHandler = components.inputHandler
+    
     -- Store the original handleCharInput function
-    local originalHandleCharInput = KeyHandler.handleCharInput
+    local originalHandleCharInput = InputHandler.handleCharInput
 
     -- Override the handleCharInput function to include autocomplete
-    function KeyHandler:handleCharInput(char, model, view)
+    function InputHandler:handleCharInput(char, model, view)
         -- Call the original function to insert the character
         originalHandleCharInput(self, char, model, view)
 
@@ -91,8 +91,6 @@ local function init(components)
         return bufferHandler.autocompleteWindow
     end
     
-    
-
     -- Function to get autocomplete suggestions
     function bufferHandler:getAutocompleteSuggestions(prefix)
         local suggestions = {}
@@ -157,36 +155,35 @@ local function init(components)
         end
     end
 
--- Function to handle inserting the selected suggestion
-function bufferHandler:acceptAutocompleteSuggestion()
-    local selectedSuggestion = self.suggestions and self.suggestions[1]
-    if selectedSuggestion then
-        local currentWord = self:getWordAtCursor()
-        
-        -- Clean up the suggestion if necessary
-        local cleanedSuggestion = selectedSuggestion:gsub("^"..currentWord, "")
-        
-        -- Insert the cleaned suggestion suffix
-        self:insertChar(cleanedSuggestion)
-        
-        -- Move the cursor to the end of the inserted word
-        self.cursorX = self.cursorX + #cleanedSuggestion
-        
-        -- Reset the autocomplete
-        self:resetAutocomplete()
-        View:drawScreen()
+    -- Function to handle inserting the selected suggestion
+    function bufferHandler:acceptAutocompleteSuggestion()
+        local selectedSuggestion = self.suggestions and self.suggestions[1]
+        if selectedSuggestion then
+            local currentWord = self:getWordAtCursor()
+            
+            -- Clean up the suggestion if necessary
+            local cleanedSuggestion = selectedSuggestion:gsub("^"..currentWord, "")
+            
+            -- Insert the cleaned suggestion suffix
+            self:insertChar(cleanedSuggestion)
+            
+            -- Move the cursor to the end of the inserted word
+            self.cursorX = self.cursorX + #cleanedSuggestion
+            
+            -- Reset the autocomplete
+            self:resetAutocomplete()
+            View:drawScreen()
+        end
     end
-end
-
 
     -- Map keybindings related to autocomplete
-    KeyHandler:map("i", "backspace", function()
+    InputHandler:map({"insert"}, {"backspace"}, "autocomplete_backspace", function()
         bufferHandler:resetAutocomplete()
         bufferHandler:backspace()
         View:drawScreen()
     end, "Handle backspace with autocomplete")
 
-    KeyHandler:map("i", "tab", function()
+    InputHandler:map({"insert"}, {"tab"}, "autocomplete_tab", function()
         if bufferHandler.suggestions then
             bufferHandler:acceptAutocompleteSuggestion()
         else
@@ -197,7 +194,7 @@ end
         View:drawScreen()
     end, "Autocomplete or insert tab")
 
-    KeyHandler:map("i", "enter", function()
+    InputHandler:map({"insert"}, {"enter"}, "autocomplete_enter", function()
         if bufferHandler.suggestions then
             bufferHandler:acceptAutocompleteSuggestion()
         else
@@ -206,40 +203,41 @@ end
             View:drawScreen()
         end
     end, "Autocomplete or insert new line")
-    KeyHandler:map("i", "arrow_up", function()
+
+    InputHandler:map({"insert"}, {"up"}, "autocomplete_up", function()
         if bufferHandler.suggestions then
             table.insert(bufferHandler.suggestions, 1, table.remove(bufferHandler.suggestions))
             View:showAutocompleteWindow(bufferHandler.suggestions)
         else
-            CommandHandler:execute("move_up")
             bufferHandler:markDirty(bufferHandler.cursorY)
+            InputHandler:execute("move_up")
         end
         View:drawScreen()
     end, "Move up in autocomplete or move cursor up")
 
-    KeyHandler:map("i", "arrow_down", function()
+    InputHandler:map({"insert"}, {"down"}, "autocomplete_down", function()
         if bufferHandler.suggestions then
             table.insert(bufferHandler.suggestions, table.remove(bufferHandler.suggestions, 1))
             View:showAutocompleteWindow(bufferHandler.suggestions)
         else
-            CommandHandler:execute("move_down")
             bufferHandler:markDirty(bufferHandler.cursorY)
+            InputHandler:execute("move_down")
         end
         View:drawScreen()
     end, "Move down in autocomplete or move cursor down")
 
-    KeyHandler:map("i", "arrow_left", function()
+    InputHandler:map({"insert"}, {"left"}, "autocomplete_left", function()
         bufferHandler:resetAutocomplete()
-        CommandHandler:execute("move_left")
+        InputHandler:execute("move_left")
         bufferHandler:markDirty(bufferHandler.cursorY)
         View:drawScreen()
     end, "Cancel autocomplete and move cursor left")
 
-    KeyHandler:map("i", "arrow_right", function()
+    InputHandler:map({"insert"}, {"right"}, "autocomplete_right", function()
         if bufferHandler.suggestions then
             bufferHandler:acceptAutocompleteSuggestion()
         else
-            CommandHandler:execute("move_right")
+            InputHandler:execute("move_right")
             bufferHandler:markDirty(bufferHandler.cursorY)
             View:drawScreen()
         end

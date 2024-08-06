@@ -1,7 +1,7 @@
 local function init(components)
-    local View = components.View
+    local View = components.view
     local BufferHandler = components.bufferHandler
-    local KeyHandler = components.KeyHandler
+    local InputHandler = components.inputHandler
 
     local function openFileExplorer()
         -- Get the list of files and directories in the current directory
@@ -82,7 +82,7 @@ local function init(components)
             fileExplorerWindow:show()
             local input = ""
             local firstInput = true
-        
+
             while true do
                 local event, key = os.pullEvent()
                 if event == "char" then
@@ -104,8 +104,6 @@ local function init(components)
                 end
             end
         end
-        
-        
 
         -- Listen for input to navigate and open files or toggle controls
         while true do
@@ -266,7 +264,7 @@ local function init(components)
     end
 
     -- Register a keybinding to open the file explorer
-    KeyHandler:map("n", "backslash", function()
+    InputHandler:map({"normal"}, {"backslash"}, "open_file_explorer", function()
         openFileExplorer()
     end, "Open File Explorer")
 end
