@@ -175,7 +175,7 @@ local function init(components)
         if bufferHandler.errorWindow then
             bufferHandler.errorWindow:close()
             bufferHandler.errorWindow = nil
-            View:drawScreen()
+            viewInstance:drawScreen()
         end
     end
 end
@@ -270,7 +270,7 @@ end
         end
 
         function window:show()
-            View:getInstance().activeWindow = self
+            viewInstance.activeWindow = self
             term.setBackgroundColor(self.backgroundColor)
             term.setTextColor(self.textColor)
             for i = 1, self.height do
@@ -279,7 +279,7 @@ end
             end
             term.setBackgroundColor(colors.black)
             term.setTextColor(colors.white)
-            View:drawScreen()
+            viewInstance:drawScreen()
         end
 
         function window:scrollUp()
@@ -290,7 +290,6 @@ end
                 end
                 self.buffer[self.height] = string.rep(" ", self.width)
                 self:show()
-                View:drawScreen()
             end
         end
 
@@ -302,21 +301,19 @@ end
                 end
                 self.buffer[1] = string.rep(" ", self.width)
                 self:show()
-                View:drawScreen()
             end
         end
 
         function window:close()
-            local view = View:getInstance()
 
-            view.activeWindow = nil
-            view:drawScreen()
+            viewInstance.activeWindow = nil
+            viewInstance:drawScreen()
         end
 
         function window:writeText(x, y, text)
             local bufferLine = self.buffer[y] or string.rep(" ", self.width)
             self.buffer[y] = bufferLine:sub(1, x - 1) .. text .. bufferLine:sub(x + #text)
-            View:drawScreen()
+            self:show()
         end
 
         function window:write(text)
@@ -330,15 +327,14 @@ end
                 self.currentLine = self.currentLine + 1
                 self.currentColumn = 1
             end
-            View:drawScreen()
+            self:show()
         end
 
         function window:writeline(text)
             self:write(text)
             self.currentLine = self.currentLine + 1
             self.currentColumn = 1
-            bufferHandler:refreshScreen()
-            View:drawScreen()
+            self:show()
         end
 
         function window:clear()
@@ -347,7 +343,6 @@ end
             end
             self.currentLine = 1
             self.currentColumn = 1
-            self:show()  -- Only redraw the window area
         end
 
         function window:print(text)
@@ -365,9 +360,7 @@ end
             end
         end
 
-        table.insert(View:getInstance().windows, window)
-
-        View:drawScreen()
+        table.insert(viewInstance.windows, window)
         return window
     end
     function View:showErrorWindow(errorMessage, lineNumber)

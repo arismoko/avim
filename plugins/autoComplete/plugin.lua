@@ -204,7 +204,6 @@ local function init(components)
             self.autocompleteWindow:close()
             self.autocompleteWindow = nil
             self.suggestions = nil
-            View:drawScreen()
         end
     end
 
