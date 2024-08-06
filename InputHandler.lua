@@ -290,7 +290,7 @@ function InputHandler:handleKeyPress(key, isDown, model, view)
                 six = "6", seven = "7", eight = "8", nine = "9", zero = "0"
             }
 
-            if numericKeyMap[keyName] then
+            if numericKeyMap[keyName] and self.currentModiferHeld == "" then
                 if self.numericPrefix then
                     self.numericPrefix = self.numericPrefix .. numericKeyMap[keyName]
                 else
