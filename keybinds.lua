@@ -273,7 +273,7 @@ InputHandler:map({"normal", "visual"}, {"0"}, "move_to_line_start", function()
     bufferHandler.cursorX = 1
 end, "Move to Start of Line")
 
-InputHandler:map({"normal", "visual"}, {"^"}, "move_to_first_non_blank", function()
+InputHandler:map({"normal", "visual"}, {"//"}, "move_to_first_non_blank", function()
     local line = bufferHandler.buffer[bufferHandler.cursorY]
     local firstNonBlank = line:find("%S")
     if firstNonBlank then
