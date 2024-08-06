@@ -242,7 +242,7 @@ local function init(components)
             bufferHandler:acceptAutocompleteSuggestion()
             updateIdentifiers()
         else
-            bufferHandler:insertChar("    ")
+            bufferHandler:insertChar("  ")
             bufferHandler:markDirty(bufferHandler.cursorY)
             View:drawLine(bufferHandler.cursorY - bufferHandler.scrollOffset)
         end
