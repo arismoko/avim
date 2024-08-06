@@ -868,7 +868,7 @@ end, "Backspace")
 -- === Visual Mode Keybindings ===
 InputHandler:map({"visual"}, {"y"}, "yank_visual_selection", function()
     bufferHandler:yankSelection()
-    InputHandler:execute("end_visual_mode")
+    InputHandler:executeCommand("end_visual_mode")
 end, "Yank Visual Selection and Exit Visual Mode")
 
 InputHandler:map({"visual"}, {"x"}, "delete_visual_selection", function()
@@ -898,11 +898,11 @@ InputHandler:map({"visual"}, {"x"}, "delete_visual_selection", function()
     updateBufferAfterVisualOperation(bufferHandler, startX, startY)
 
     bufferHandler:updateStatusBar("Deleted visual selection")
-    InputHandler:execute("end_visual_mode")
+    InputHandler:executeCommand("end_visual_mode")
 end, "Delete Visual Selection and Exit Visual Mode")
 
 InputHandler:map({"visual"}, {"c^"}, "change_visual_selection", function()
-    InputHandler:execute("delete_visual_selection")
+    InputHandler:executeCommand("delete_visual_selection")
     bufferHandler:switchMode("insert")
 end, "Change Visual Selection")
 
@@ -938,7 +938,7 @@ InputHandler:map({"visual"}, {"d"}, "cut_visual_selection", function()
     updateBufferAfterVisualOperation(bufferHandler, startX, startY)
 
     bufferHandler:updateStatusBar("Cut visual selection")
-    InputHandler:execute("end_visual_mode")
+    InputHandler:executeCommand("end_visual_mode")
 end, "Cut Visual Selection and Exit Visual Mode")
 
 InputHandler:map({"visual","normal"}, {"<"}, "unindent", function()
