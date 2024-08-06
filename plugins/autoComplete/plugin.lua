@@ -204,7 +204,7 @@ local function init(components)
             self.autocompleteWindow:close()
             self.autocompleteWindow = nil
             self.suggestions = nil
-            require("View"):drawScreen()
+            View:drawScreen()
         end
     end
 
