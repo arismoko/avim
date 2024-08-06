@@ -240,7 +240,6 @@ local function init(components)
     InputHandler:map({"insert"}, {"tab"}, "autocomplete_tab", function()
         if bufferHandler.suggestions then
             bufferHandler:acceptAutocompleteSuggestion()
-            updateIdentifiers()
         else
             bufferHandler:insertChar("  ")
             bufferHandler:markDirty(bufferHandler.cursorY)
@@ -252,7 +251,6 @@ local function init(components)
     InputHandler:map({"insert"}, {"enter"}, "autocomplete_enter", function()
         if bufferHandler.suggestions then
             bufferHandler:acceptAutocompleteSuggestion()
-            updateIdentifiers()
         else
             bufferHandler:enter()
             bufferHandler:markDirty(bufferHandler.cursorY)
@@ -293,7 +291,6 @@ local function init(components)
     InputHandler:map({"insert"}, {"right"}, "autocomplete_right", function()
         if bufferHandler.suggestions then
             bufferHandler:acceptAutocompleteSuggestion()
-            updateIdentifiers()
         else
             InputHandler:execute("move_right")
             bufferHandler:markDirty(bufferHandler.cursorY)
