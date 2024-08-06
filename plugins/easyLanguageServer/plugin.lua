@@ -346,7 +346,7 @@ end
             end
             self.currentLine = 1
             self.currentColumn = 1
-            View:drawScreen()
+            self:show()  -- Only redraw the window area
         end
 
         function window:print(text)
