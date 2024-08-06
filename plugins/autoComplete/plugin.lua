@@ -225,7 +225,6 @@ local function init(components)
             
             -- Reset the autocomplete
             self:resetAutocomplete()
-            View:drawScreen()
         end
     end
 
