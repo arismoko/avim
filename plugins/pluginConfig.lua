@@ -1,5 +1,5 @@
 return {
     {name = "fileExplorer", enabled = true},
-    {name = "aLSP", enabled = false},
+    {name = "easyLanguageServer", enabled = true},
     {name = "autoComplete", enabled = true},
 }

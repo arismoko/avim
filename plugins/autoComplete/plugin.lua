@@ -1,27 +1,67 @@
 local function init(components)
     local View = components.view
-    local bufferHandler = components.bufferHandler
     local InputHandler = components.inputHandler
-    
+    local bufferHandler = components.bufferHandler
+
+    -- Hardcoded autocomplete keywords
+    local autocompleteKeywords = {
+        "and", "break", "do", "else", "elseif", "end", "for", "function", "if", "in", 
+        "local", "nil", "not", "or", "repeat", "require", "return", "then", "until", 
+        "while"
+    }
+
+    -- Create a set for quick lookup of hardcoded keywords
+    local keywordSet = {}
+    for _, keyword in ipairs(autocompleteKeywords) do
+        keywordSet[keyword] = true
+    end
+
+    -- Function to update the identifiers based on the current buffer content
+    local function updateIdentifiers()
+        local content = bufferHandler:getBufferAsString()  -- Fetch the entire buffer content
+        local identifiers = {}  -- Reset the identifiers
+        local lineNumber = 1
+
+        -- Iterate through each line in the content
+        for line in content:gmatch("[^\n]*\n?") do
+            -- Remove Lua comments and strings from the line
+            line = line:gsub("%-%-.*", "")  -- Remove single-line comments
+            line = line:gsub("%[%[.-%]%]", "")  -- Remove multiline strings
+            line = line:gsub("\"[^\"]*\"", "")  -- Remove double-quoted strings
+            line = line:gsub("\'[^\']*\'", "")  -- Remove single-quoted strings
+
+            -- Extract and update identifiers with line numbers
+            for word in line:gmatch("[_%a][_%w]*") do
+                if not keywordSet[word] and not textutils.complete(word, _G)[1] then
+                    table.insert(identifiers, {identifier = word, line = lineNumber})
+                end
+            end
+
+            lineNumber = lineNumber + 1
+        end
+
+        bufferHandler.dynamicIdentifiers = identifiers  -- Store the identifiers in the bufferHandler
+    end
+
     -- Store the original handleCharInput function
     local originalHandleCharInput = InputHandler.handleCharInput
 
     -- Override the handleCharInput function to include autocomplete
-    function InputHandler:handleCharInput(char, model, view)
+    function InputHandler:handleCharInput(char)
         -- Call the original function to insert the character
-        originalHandleCharInput(self, char, model, view)
+        originalHandleCharInput(self, char)
 
         -- Trigger autocomplete after inserting a character
-        local currentWord = model:getWordAtCursor()
+        local currentWord = bufferHandler:getWordAtCursor()
         if #currentWord > 0 then
-            local suggestions = model:getAutocompleteSuggestions(currentWord)
+            local suggestions = bufferHandler:getAutocompleteSuggestions(currentWord)
             if #suggestions > 0 then
-                view:showAutocompleteWindow(suggestions)
+                View:showAutocompleteWindow(suggestions)
             else
-                model:resetAutocomplete()
+                bufferHandler:resetAutocomplete()
             end
         else
-            model:resetAutocomplete()
+            bufferHandler:resetAutocomplete()
         end
     end
 
@@ -37,13 +77,6 @@ local function init(components)
         end
         return value
     end
-
-    -- Hardcoded autocomplete keywords
-    local autocompleteKeywords = {
-        "and", "break", "do", "else", "elseif", "end", "for", "function", "if", "in", 
-        "local", "nil", "not", "or", "repeat", "require", "return", "then", "until", 
-        "while"
-    }
 
     -- Function to show the autocomplete window
     function View:showAutocompleteWindow(suggestions)
@@ -132,6 +165,14 @@ local function init(components)
                     table.insert(suggestions, suggestion)
                 end
     
+                -- Add dynamic identifiers
+                for _, identifierEntry in ipairs(self.dynamicIdentifiers or {}) do
+                    local identifier = identifierEntry.identifier
+                    if identifier:sub(1, #prefix) == prefix then
+                        table.insert(suggestions, identifier)
+                    end
+                end
+    
                 -- Add hardcoded keywords
                 for _, keyword in ipairs(autocompleteKeywords) do
                     if keyword:sub(1, #prefix) == prefix then
@@ -140,10 +181,22 @@ local function init(components)
                 end
             end
         end
-    
-        self:updateStatusBar("Suggestions for: " .. prefix .. " (" .. #suggestions .. " found)")
-        return suggestions
+        
+        -- Remove any duplicates in the suggestions
+        local uniqueSuggestions = {}
+        local suggestionSet = {}
+        
+        for _, suggestion in ipairs(suggestions) do
+            if not suggestionSet[suggestion] then
+                table.insert(uniqueSuggestions, suggestion)
+                suggestionSet[suggestion] = true
+            end
+        end
+        
+        self:updateStatusBar("Suggestions for: " .. prefix .. " (" .. #uniqueSuggestions .. " found)")
+        return uniqueSuggestions
     end
+
     
     -- Function to reset autocomplete state
     function bufferHandler:resetAutocomplete()
@@ -178,6 +231,7 @@ local function init(components)
 
     -- Map keybindings related to autocomplete
     InputHandler:map({"insert"}, {"backspace"}, "autocomplete_backspace", function()
+        updateIdentifiers()
         bufferHandler:resetAutocomplete()
         bufferHandler:backspace()
         View:drawScreen()
@@ -186,6 +240,7 @@ local function init(components)
     InputHandler:map({"insert"}, {"tab"}, "autocomplete_tab", function()
         if bufferHandler.suggestions then
             bufferHandler:acceptAutocompleteSuggestion()
+            updateIdentifiers()
         else
             bufferHandler:insertChar("    ")
             bufferHandler:markDirty(bufferHandler.cursorY)
@@ -197,6 +252,7 @@ local function init(components)
     InputHandler:map({"insert"}, {"enter"}, "autocomplete_enter", function()
         if bufferHandler.suggestions then
             bufferHandler:acceptAutocompleteSuggestion()
+            updateIdentifiers()
         else
             bufferHandler:enter()
             bufferHandler:markDirty(bufferHandler.cursorY)
@@ -227,6 +283,7 @@ local function init(components)
     end, "Move down in autocomplete or move cursor down")
 
     InputHandler:map({"insert"}, {"left"}, "autocomplete_left", function()
+        updateIdentifiers()
         bufferHandler:resetAutocomplete()
         InputHandler:execute("move_left")
         bufferHandler:markDirty(bufferHandler.cursorY)
@@ -236,12 +293,35 @@ local function init(components)
     InputHandler:map({"insert"}, {"right"}, "autocomplete_right", function()
         if bufferHandler.suggestions then
             bufferHandler:acceptAutocompleteSuggestion()
+            updateIdentifiers()
         else
             InputHandler:execute("move_right")
             bufferHandler:markDirty(bufferHandler.cursorY)
             View:drawScreen()
         end
     end, "Accept autocomplete or move cursor right")
+
+    -- Save the original loadFile function
+    local originalLoadFile = bufferHandler.loadFile
+
+    -- Extend the loadFile function
+    function bufferHandler:loadFile(name)
+        -- Call the original loadFile method
+        originalLoadFile(self, name)
+        -- After loading the file, call updateIdentifiers to refresh the identifier list
+        updateIdentifiers()
+    end
+
+    -- Save the original saveFile function
+    local originalSaveFile = bufferHandler.saveFile
+
+    -- Extend the saveFile function
+    function bufferHandler:saveFile()
+        -- Call the original saveFile method
+        originalSaveFile(self)
+        -- After saving the file, call updateIdentifiers to refresh the identifier list
+        updateIdentifiers()
+    end
 end
 
 return {

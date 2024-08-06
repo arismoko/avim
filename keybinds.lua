@@ -288,7 +288,10 @@ InputHandler:map({"normal", "visual"}, {"$"}, "move_to_line_end", function()
 end, "Move to End of Line")
 
 -- === Editing ===
-InputHandler:map({"normal"}, {"d + d"}, "cut_line", function(isRepeated)
+InputHandler:map({"normal"}, {"d + d"}, "cut_line", function(isRepeated,iteration,count)
+
+    bufferHandler:saveToHistory()
+    if iteration == 1 then bufferHandler.yankRegister = "" end
     local lineToCut = bufferHandler.buffer[bufferHandler.cursorY]
     if isRepeated then
         bufferHandler.yankRegister = bufferHandler.yankRegister .. "\n" .. lineToCut
@@ -307,11 +310,6 @@ InputHandler:map({"normal"}, {"d + d"}, "cut_line", function(isRepeated)
     if bufferHandler.cursorY == 0 then
         table.insert(bufferHandler.buffer, "")
         bufferHandler.cursorY = 1
-    end
-
-    -- Mark the entire buffer as dirty
-    for i = 1, #bufferHandler.buffer do
-        bufferHandler:markDirty(i)
     end
 
     bufferHandler:updateStatusBar("Cut line")
@@ -346,7 +344,9 @@ InputHandler:map({"normal"}, {"c + w^"}, "change_word", function()
     bufferHandler:switchMode("insert")
 end, "Change Word")
 
-InputHandler:map({"normal"}, {"y + y"}, "yank_line", function(isRepeated)
+InputHandler:map({"normal"}, {"y + y"}, "yank_line", function(isRepeated,iteration)
+
+    if iteration == 1 then bufferHandler.yankRegister = "" end
     -- Save the original cursor position
     local originalCursorY = bufferHandler.cursorY
 
@@ -531,7 +531,7 @@ InputHandler:map({"normal"}, {"shift + c^"}, "delete_until_end_of_line_and_inser
     bufferHandler:switchMode("insert")
 end, "Change to Line End")
 
-InputHandler:map({"normal"}, {":", "shift + ;"}, "enter_command_mode", function()
+InputHandler:map({"normal"}, {":", "shift + semiColon"}, "__enter_command_mode", function()
     bufferHandler:switchMode("command")
 end, "Enter Command Mode")
 
@@ -543,7 +543,7 @@ InputHandler:map({"normal"}, {"f9"}, "exit_editor", function()
     bufferHandler.shouldExit = true
 end, "Exit Editor")
 
-InputHandler:map({"normal"}, {"ctrl + g"}, "goto_line", function(lineNumber)
+InputHandler:map({"normal"}, {"ctrl + g"}, "goto_line", function(_,_,lineNumber)
     lineNumber = tonumber(lineNumber)
     if not lineNumber or lineNumber < 1 or lineNumber > #bufferHandler.buffer then
         bufferHandler:updateStatusError("Invalid line number: " .. (lineNumber or ""))
@@ -556,7 +556,7 @@ InputHandler:map({"normal"}, {"ctrl + g"}, "goto_line", function(lineNumber)
 end, "Go to Line")
 
 -- === Search and Replace ===
-InputHandler:map({"normal"}, {"/"}, "search", function(pattern, direction)
+InputHandler:mapCommand("search", function(pattern, direction)
     if not pattern then
         pattern = bufferHandler.lastSearchPattern
         if not pattern then
@@ -575,9 +575,11 @@ InputHandler:map({"normal"}, {"/"}, "search", function(pattern, direction)
     end
 
     wrapSearch(bufferHandler, pattern, direction, searchFunc)
-end, "Search")
-
-InputHandler:map({"normal"}, {"?"}, "replace", function(oldPattern, newPattern, direction)
+end)
+InputHandler:map({"normal"}, {"/"}, "__search", function()
+    bufferHandler:switchMode("command", "search ")
+end, "Search") 
+InputHandler:mapCommand("replace",  function(oldPattern, newPattern, direction)
     if not oldPattern or not newPattern then
         bufferHandler:updateStatusError("Usage: :replace <old> <new>")
         return
@@ -597,15 +599,19 @@ InputHandler:map({"normal"}, {"?"}, "replace", function(oldPattern, newPattern, 
     if found then
         replaceAndMove(bufferHandler, oldPattern, newPattern)
     end
+end)
+
+InputHandler:map({"normal"}, {"?"}, "__replace", function()
+    bufferHandler:switchMode("command", "replace ")
 end, "Replace")
 
-InputHandler:map({"normal"}, {"."}, "repeat_last_search_or_replace", function()
+InputHandler:map({"normal"}, {"n"}, "__repeat_last_search_or_replace", function()
     if bufferHandler.lastSearchPattern then
         -- Reuse the existing search logic
-        InputHandler:execute("search", bufferHandler.lastSearchPattern)
+        InputHandler:executeCommand("search " .. bufferHandler.lastSearchPattern) 
     elseif bufferHandler.lastReplacePattern and bufferHandler.replaceWithPattern then
         -- Reuse the existing replace logic
-        InputHandler:execute("replace", bufferHandler.lastReplacePattern, bufferHandler.replaceWithPattern)
+        InputHandler:executeCommand("replace ".. bufferHandler.lastReplacePattern .." ".. bufferHandler.replaceWithPattern)
     else
         bufferHandler:updateStatusError("No previous search or replace operation to repeat")
     end
@@ -636,13 +642,134 @@ InputHandler:map({"normal"}, {"ctrl + /"}, "replace_all", function(oldPattern, n
 end, "Replace All")
 
 -- === Miscellaneous ===
-InputHandler:map({"normal"}, {"qa"}, "exit_editor", function()
-    bufferHandler.shouldExit = true
-end, "Quit All")
+--save / w
+InputHandler:mapCommand(
+    "w",
+    function(name)
+        if name then bufferHandler:saveFileAs(name)
+        else bufferHandler:saveFile() end
+    end
+)
 
-InputHandler:map({"normal"}, {"w"}, "save_file", function()
-    bufferHandler:saveFile()
-end, "Save File")
+InputHandler:mapCommand(
+    "qa!",
+    function()
+        bufferHandler.shouldExit = true
+    end
+)
+
+InputHandler:mapCommand(
+    "qa",
+    function()
+        local filename = bufferHandler.filename
+        if not fs.exists(filename) then
+            bufferHandler:updateStatusError("File does not exist, use :qa! to exit without saving")
+            return
+        end
+        --check if filename..".temp" exists, delete it
+        if fs.exists(filename..".temp") then
+            fs.delete(filename..".temp")
+        end
+        bufferHandler:saveFileAs(filename..".temp")
+        --compare the .temp file with the current file and if they are the same, delete the .temp file and exit other wise throw updateStatusError
+        local file1 = fs.open(filename, "r")
+        local file2 = fs.open(filename..".temp", "r")
+        local file1Content = file1.readAll()
+        local file2Content = file2.readAll()
+        file1.close()
+        file2.close()
+        if file1Content == file2Content then
+            bufferHandler.shouldExit = true
+        else
+            bufferHandler:updateStatusError("File has been modified, use :qa! to exit without saving")
+        end
+        if fs.exists(filename..".temp") then
+            fs.delete(filename..".temp")
+        end
+    end
+)
+
+InputHandler:mapCommand(
+    "q",
+    function()
+        if View.activeWindow then
+            View.activeWindow:close()
+        else
+            InputHandler:executeCommand("qa")
+        end
+    end
+)
+
+InputHandler:mapCommand(
+    "q!",
+    function()
+        if View.activeWindow then
+            View:closeAllWindows()
+        else
+            bufferHandler.shouldExit = true
+        end
+    end
+)
+
+InputHandler:mapCommand(
+    "wq",
+    function(name)
+        if name then bufferHandler:saveFileAs(name)
+        else bufferHandler:saveFile() end
+        if not bufferHandler.shouldExit then
+            bufferHandler.shouldExit = true
+        end
+    end
+)
+InputHandler:mapCommand(
+    "run",
+    function()
+        local filename = bufferHandler.filename
+        if not fs.exists(filename) then
+            bufferHandler:updateStatusError("File does not exist")
+            return
+        end
+        local id = shell.openTab(filename)
+        shell.switchTab(id)
+    end
+)
+InputHandler:mapCommand(
+    "run!",
+    function()
+        local filename = bufferHandler.filename
+        if not fs.exists(filename) then
+            bufferHandler:updateStatusError("File does not exist")
+            return
+        end
+        term.clear()
+        shell.run(filename)
+    end
+)
+
+InputHandler:mapCommand(
+    "cd",
+    function(dir)
+        if not dir then
+            bufferHandler:updateStatusError("No directory specified")
+            return
+        end
+        if not fs.exists(dir) then
+            bufferHandler:updateStatusError("Directory does not exist")
+            return
+        end
+        shell.setDir(dir)
+    end
+)
+
+InputHandler:mapCommand(
+    "ls",
+    function()
+        local currentDir = shell.dir()
+        if currentDir ==  "" then currentDir = "ROOT" 
+        else currentDir = "~/"..currentDir end
+        bufferHandler:updateStatusBar(currentDir)
+    end
+)
 
 InputHandler:map({"normal"}, {"f3"}, "show_keybindings", function()
     local descriptions = InputHandler:getKeyDescriptions(bufferHandler.mode)
@@ -686,6 +813,10 @@ InputHandler:map({"normal", "visual", "insert"}, {"f4"}, "close_windows", functi
     View:closeAllWindows()
 end, "Close Windows")
 
+InputHandler:map({"n","v"}, ".", "__repeat_last_command", function()
+    bufferHandler:switchMode("command", nil, true)
+end, "Repeat Last Command")
+
 -- === Insert Mode Keybindings ===
 InputHandler:map({"insert"}, {"f1"}, "insert_exit_to_normal", function()
     bufferHandler:switchMode("normal")
@@ -722,7 +853,7 @@ InputHandler:map({"insert"}, {"down"}, "move_down", function()
 end, "Move Down")
 
 InputHandler:map({"insert"}, {"tab"}, "insert_tab", function()
-    bufferHandler:insertChar("    ")
+    bufferHandler:insertChar(" ")
     View:drawLine(bufferHandler.cursorY - bufferHandler.scrollOffset)
 end, "Insert Tab")
 

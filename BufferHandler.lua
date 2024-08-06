@@ -182,6 +182,11 @@ function BufferHandler:saveFile()
     self:updateStatusBar("File saved: " .. self.filename)
 end
 
+function BufferHandler:saveFileAs(name)
+    self.filename = name
+    self:saveFile()
+end
+
 function BufferHandler:updateScroll()
     local adjustedHeight = SCREENHEIGHT - self.statusBarHeight
     local oldScrollOffset = self.scrollOffset
@@ -466,13 +471,16 @@ function BufferHandler:switchMode(mode, initialCommand, autoExecute)
     if mode == "command" then
         local inputHandler = require("InputHandler"):getInstance()
         -- Pass initialCommand and autoExecute, even if initialCommand is nil
-        inputHandler:handleCommandInput(self, view, initialCommand, autoExecute)
+        inputHandler:handleCommandInput(initialCommand, autoExecute)
     end
     self:refreshScreen()
 end
 
 -- Save the current state to history
 function BufferHandler:saveToHistory()
+    if self.history == nil then
+        self.history = {}
+    end
     table.insert(self.history, {
         buffer = table.deepCopy(self.buffer),
         cursorX = self.cursorX,
@@ -499,15 +507,61 @@ end
 
 function BufferHandler:getWordAtCursor()
     local line = self.buffer[self.cursorY] or ""
-    local startPos = self.cursorX
+    local cursorPos = self.cursorX
 
+    -- Find the start of the word
+    local startPos = cursorPos
     while startPos > 1 and line:sub(startPos - 1, startPos - 1):match("[%w_%.:]") do
         startPos = startPos - 1
     end
 
-    return line:sub(startPos, self.cursorX - 1)
+    -- Find the end of the word
+    local endPos = cursorPos
+    while endPos <= #line and line:sub(endPos, endPos):match("[%w_%.:]") do
+        endPos = endPos + 1
+    end
+
+    -- Return the word under the cursor
+    return line:sub(startPos, endPos - 1)
 end
 
+function BufferHandler:getNextIdentifierOnLine()
+    if self.dynamicIdentifiers == nil or #self.dynamicIdentifiers == 0 then
+        return nil
+    end
+
+    local line = self.buffer[self.cursorY] or ""
+    local startPos = self.cursorX
+    local lineEnd = #line
+
+    while startPos <= lineEnd do
+        -- Get the word starting at the current cursor position
+        self.cursorX = startPos
+        local word = self:getWordAtCursor()
+
+        if word then
+            for _, identifierEntry in ipairs(self.dynamicIdentifiers) do
+                if word == identifierEntry.identifier then
+                    -- Move cursor to the found word
+                    self.cursorX = startPos
+                    return word
+                end
+            end
+        end
+
+        -- Move cursor to the next non-alphanumeric character
+        while startPos <= lineEnd and line:sub(startPos, startPos):match("[%w_%.:]") do
+            startPos = startPos + 1
+        end
+
+        -- Move cursor past non-alphanumeric characters
+        while startPos <= lineEnd and not line:sub(startPos, startPos):match("[%w_]") do
+            startPos = startPos + 1
+        end
+    end
+
+    return nil
+end
 
 
 
@@ -549,5 +603,16 @@ function BufferHandler:insertTextAtCursor(text)
     self:updateScroll()
     self:saveToHistory()
 end
+function BufferHandler:getLine(lineIndex)
+    if lineIndex < 1 or lineIndex > #self.buffer then
+        return nil -- Return nil if the requested line is out of bounds
+    end
+    return self.buffer[lineIndex]
+end
+
+function BufferHandler:getBufferAsString()
+    return table.concat(self.buffer, "\n")
+end
+
 
 return BufferHandler

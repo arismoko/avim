@@ -5,92 +5,6 @@ View.__index = View
 
 local instance
 
-local colorMatch = {
-    popupBG = colors.lightGray,
-    popupFrame = colors.gray,
-    popupFont = colors.black,
-    cAccentText = colors.lightGray,
-    bg = colors.black,
-    bracket = colors.lightGray,
-    comment = colors.gray,
-    func = colors.orange,
-    keyword = colors.red,
-    number = colors.magenta,
-    operator = colors.cyan,
-    string = colors.green,
-    special = colors.yellow,
-    text = colors.white,
-    positive = colors.lime,
-    negative = colors.red
-}
-
-local tKeywords = {
-    ["and"] = true,
-    ["break"] = true,
-    ["do"] = true,
-    ["else"] = true,
-    ["elseif"] = true,
-    ["end"] = true,
-    ["for"] = true,
-    ["function"] = true,
-    ["if"] = true,
-    ["in"] = true,
-    ["local"] = true,
-    ["nil"] = true,
-    ["not"] = true,
-    ["or"] = true,
-    ["repeat"] = true,
-    ["require"] = true,
-    ["return"] = true,
-    ["then"] = true,
-    ["until"] = true,
-    ["while"] = true,
-}
-
-local tPatterns = {
-    { "^%-%-.*", colorMatch["comment"] },
-    { "^\"\"", colorMatch["string"] },
-    { "^\".-[^\\]\"", colorMatch["string"] },
-    { "^\'\'", colorMatch["string"] },
-    { "^\'.-[^\\]\'", colorMatch["string"] },
-    { "^%[%[%]%]", colorMatch["string"] },
-    { "^%[%[.-[^\\]%]%]", colorMatch["string"] },
-    { "^[\127\162\163\165\169\174\182\181\177\183\186\188\189\190\215\247@]+", colorMatch["special"] },
-    { "^[%d][xA-Fa-f.%d#]+", colorMatch["number"] },
-    { "^[%d]+", colorMatch["number"] },
-    { "^[,{}%[%]%(%)]", colorMatch["bracket"] },
-    { "^[!%/\\:~<>=%*%+%-%%]+", colorMatch["operator"] },
-    { "^true", colorMatch["number"] },
-    { "^false", colorMatch["number"] },
-    { "^[%w_%.]+", function(match, after)
-        if tKeywords[match] then
-            return colorMatch["keyword"]
-        elseif after:sub(1,1) == "(" then
-            return colorMatch["func"]
-        end
-        return colorMatch["text"]
-    end },
-    { "^[^%w_]", colorMatch["text"] }
-}
-
-local function highlightLine(line)
-    while #line > 0 do
-        for _, pattern in ipairs(tPatterns) do
-            local match = line:match(pattern[1])
-            if match then
-                local color = pattern[2]
-                if type(color) == "function" then
-                    color = color(match, line:sub(#match + 1))
-                end
-                term.setTextColor(color)
-                term.write(match)
-                line = line:sub(#match + 1)
-                break
-            end
-        end
-    end
-end
-
 function View:new()
     if not instance then
         instance = {
@@ -299,7 +213,7 @@ function View:showPopup(message)
     local popupY = 1
 
     -- Create and display the popup window
-    local window = self:createWindow(popupX, popupY, popupWidth, popupHeight, colorMatch.popupBG, colorMatch.popupFont)
+    local window = self:createWindow(popupX, popupY, popupWidth, popupHeight)
 
     local startIndex = 1
     local itemsPerPage = popupHeight - 4  -- Adjust based on available window height
@@ -341,18 +255,12 @@ function View:showPopup(message)
     end
 end
 
-
-
-
-
-
 function View:drawScreen()
     if self.activeWindow then
         self.activeWindow:show()
         return
     else
         local adjustedHeight = SCREENHEIGHT - Model.statusBarHeight
-
 
         for lineNumber in pairs(Model.dirtyLines) do
             self:drawLine(lineNumber)
@@ -422,11 +330,10 @@ function View:drawLine(y)
             term.setBackgroundColor(colors.black)
             term.write(afterHighlight)
         else
-            highlightLine(lineToDisplay)
+            term.write(lineToDisplay)
         end
     end
 end
-
 
 function View:drawStatusBar()
     local statusBarLines = Model.statusBarHeight
@@ -457,9 +364,9 @@ function View:updateCursor()
     term.setCursorPos(screenCursorX + lineNumberWidth, Model.cursorY - Model.scrollOffset)
 end
 
-
 function View:getAvailableWidth()
     local lineNumberWidth = self:getLineNumberWidth()
     return SCREENWIDTH - lineNumberWidth - 1
 end
+
 return View

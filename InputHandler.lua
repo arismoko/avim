@@ -3,6 +3,8 @@ InputHandler.__index = InputHandler
 
 local instance
 
+local model = BufferHandler:getInstance()
+local view = View:getInstance()
 function InputHandler:new()
     if not instance then
         instance = {
@@ -97,9 +99,7 @@ function InputHandler:map(modes, keyCombos, commandName, callback, description)
 
                 if i == #keys then
                     currentMap[key] = { 
-                        callback = function() 
-                            self:executeCommand(commandName) 
-                        end, 
+                        command = commandName, 
                         description = description,
                         keyUpEvent = keyUpEvent -- Store key up event flag
                     }
@@ -247,167 +247,180 @@ function table.contains(tbl, element)
     return false
 end
 
-function InputHandler:handleKeyPress(key, isDown, model, view)
+function InputHandler:handleKeyPress(key, isDown)
     local keyName = keys.getName(key)
 
     if model.InputMode == "keys" then
-        -- Skip sequence detection in insert mode
         if model.mode == "insert" then
-            if isDown then
-                self:handleCharInput(keyName, model, view) -- Treat as character input
-            end
-            return
+            return self:handleInsertMode(keyName, isDown)
         end
 
-        -- Handle modifier keys (shift, ctrl, alt)
         if self.modifierKeys[key] then
-            local modifier = self.modifierKeys[key]
-
-            -- Ignore shift in insert mode
-            if model.mode == "insert" and modifier == "shift" then
-                return
-            end
-
-            self.keyStates[modifier] = isDown
-
-            if isDown then
-                self.currentModifierHeld = modifier
-                model:updateStatusBar(modifier:sub(1, 1):upper() .. modifier:sub(2) .. " held, waiting for inputs")
-            else
-                -- Only reset currentModifierHeld if this modifier is released
-                if self.currentModifierHeld == modifier then
-                    self.currentModifierHeld = ""
-                    model:updateStatusBar(modifier:sub(1, 1):upper() .. modifier:sub(2) .. " released with no subkey found")
-                end
-            end
-            return
+            return self:handleModifierKeys(key, isDown)
         end
 
         if isDown then
-            -- Handle numeric prefixes (e.g., "one", "two", etc.)
-            local numericKeyMap = {
-                one = "1", two = "2", three = "3", four = "4", five = "5",
-                six = "6", seven = "7", eight = "8", nine = "9", zero = "0"
-            }
-
-            if numericKeyMap[keyName] and self.currentModiferHeld == "" then
-                if self.numericPrefix then
-                    self.numericPrefix = self.numericPrefix .. numericKeyMap[keyName]
-                else
-                    self.numericPrefix = numericKeyMap[keyName]
-                end
-                model:updateStatusBar("Prefix: " .. self.numericPrefix)
-                return
-            end
-
-            table.insert(self.currentKeySequence, keyName)
-
-            -- Handle leader key sequences
-            if #self.currentKeySequence == 1 and keyName == self.leaderKey then
-                model:updateStatusBar("Leader key pressed, waiting for sequence...")
-                return
-            end
-
-            local currentMap = self.keyMap[model.mode]
-
-            -- Apply current modifier held if any
-            if self.currentModifierHeld ~= "" then
-                currentMap = currentMap[self.currentModifierHeld] or {}
-            end
-
-            -- Traverse the key sequence map and check if it is valid
-            local isValidSequence = true
-            for _, key in ipairs(self.currentKeySequence) do
-                if not currentMap[key] then
-                    isValidSequence = false
-                    break
-                end
-                currentMap = currentMap[key]
-            end
-
-            -- If the sequence is invalid but the key is a numeric prefix, handle it accordingly
-            if not isValidSequence and numericKeyMap[keyName] then
-                self.numericPrefix = (self.numericPrefix or "") .. numericKeyMap[keyName]
-                model:updateStatusBar("Prefix: " .. self.numericPrefix)
-                return
-            end
-
-            -- If the sequence is invalid, reset and notify the user
-            if not isValidSequence then
-                model:updateStatusBar("Invalid key sequence: " .. table.concat(self.currentKeySequence, " + ") .. ", resetting...")
-                self:resetKeySequence()
-                return
-            end
-
-            -- Check if currentMap has a valid callback (indicating a complete keybinding)
-            if currentMap.callback and not currentMap.keyUpEvent then
-                local prefix = tonumber(self.numericPrefix) or 1
-                for _ = 1, prefix do
-                    currentMap.callback()
-                end
-                self:resetKeySequence()
-                if self.leaderTimeoutTimer then
-                    os.cancelTimer(self.leaderTimeoutTimer) -- Cancel any pending timer
-                    self.leaderTimeoutTimer = nil -- Reset the timer reference
-                end
-            else
-                -- Update the status bar only if there is a key sequence longer than one key
-                if #self.currentKeySequence > 1 then
-                    model:updateStatusBar("Sequence: " .. table.concat(self.currentKeySequence, " + "))
-                end
-
-                -- Start or reset the timer to handle sequence timeout
-                if self.leaderTimeoutTimer then
-                    os.cancelTimer(self.leaderTimeoutTimer) -- Cancel the previous timer if it exists
-                end
-                self.leaderTimeoutTimer = os.startTimer(self.leaderTimeout)
-            end
+            return self:handleKeyDown(keyName)
         else
-            -- Handle key release
-            local currentMap = self.keyMap[model.mode]
-            if self.currentModifierHeld ~= "" then
-                currentMap = currentMap[self.currentModifierHeld] or {}
-            end
-
-            for _, key in ipairs(self.currentKeySequence) do
-                currentMap = currentMap[key] or {}
-            end
-
-            if currentMap.callback and currentMap.keyUpEvent then
-                local prefix = tonumber(self.numericPrefix) or 1
-                for _ = 1, prefix do
-                    currentMap.callback()
-                end
-                self:resetKeySequence()
-                if self.leaderTimeoutTimer then
-                    os.cancelTimer(self.leaderTimeoutTimer) -- Cancel any pending timer
-                    self.leaderTimeoutTimer = nil -- Reset the timer reference
-                end
-            end
+            return self:handleKeyUp()
         end
     end
 end
 
-function InputHandler:handleInputEvent(mode, model, view)
+function InputHandler:handleInsertMode(keyName, isDown)
+    if isDown then
+        self:handleCharInput(keyName) -- Treat as character input
+    end
+end
+
+function InputHandler:handleModifierKeys(key, isDown)
+    local modifier = self.modifierKeys[key]
+
+    if model.mode == "insert" and modifier == "shift" then
+        return
+    end
+
+    self.keyStates[modifier] = isDown
+
+    if isDown then
+        self.currentModifierHeld = modifier
+        model:updateStatusBar(modifier:sub(1, 1):upper() .. modifier:sub(2) .. " held, waiting for inputs")
+    else
+        if self.currentModifierHeld == modifier then
+            self.currentModifierHeld = ""
+            model:updateStatusBar(modifier:sub(1, 1):upper() .. modifier:sub(2) .. " released with no subkey found")
+        end
+    end
+end
+
+function InputHandler:handleKeyDown(keyName)
+    if self.currentModifierHeld == "" then
+
+        local numericKeyMap = self:getNumericKeyMap()
+
+        if numericKeyMap[keyName] then
+            return self:handleNumericPrefix(keyName)
+        end
+    end
+    table.insert(self.currentKeySequence, keyName)
+
+    if self:isLeaderKeySequence(keyName) then
+        model:updateStatusBar("Leader key pressed, waiting for sequence...")
+        return
+    end
+
+    return self:handleKeySequence()
+end
+
+function InputHandler:handleKeyUp()
+    local currentMap = self:getCurrentKeyMap(model.mode)
+
+    for _, key in ipairs(self.currentKeySequence) do
+        currentMap = currentMap[key] or {}
+    end
+
+    if currentMap.command and currentMap.keyUpEvent then
+        self:executeCommand(currentMap.command)
+    end
+end
+
+function InputHandler:getNumericKeyMap()
+    return {
+        one = "1", two = "2", three = "3", four = "4", five = "5",
+        six = "6", seven = "7", eight = "8", nine = "9", zero = "0"
+    }
+end
+
+function InputHandler:handleNumericPrefix(keyName)
+    local numericKeyMap = self:getNumericKeyMap()
+
+    if self.numericPrefix then
+        self.numericPrefix = self.numericPrefix .. numericKeyMap[keyName]
+    else
+        self.numericPrefix = numericKeyMap[keyName]
+    end
+    model:updateStatusBar("Prefix: " .. self.numericPrefix)
+end
+
+function InputHandler:isLeaderKeySequence(keyName)
+    return #self.currentKeySequence == 1 and keyName == self.leaderKey
+end
+
+function InputHandler:handleKeySequence()
+    local currentMap = self:getCurrentKeyMap(model.mode)
+    local isValidSequence = true
+
+    for _, key in ipairs(self.currentKeySequence) do
+        if not currentMap[key] then
+            isValidSequence = false
+            break
+        end
+        currentMap = currentMap[key]
+    end
+
+    if not isValidSequence then
+        model:updateStatusBar("Invalid key sequence: " .. table.concat(self.currentKeySequence, " + ") .. ", resetting...")
+        self:resetKeySequence()
+        return
+    end
+
+    if currentMap.command and not currentMap.keyUpEvent then
+        self:executeCommand(currentMap.command, tonumber(self.numericPrefix))
+    else
+        self:updateStatusBarForSequence()
+    end
+end
+
+function InputHandler:getCurrentKeyMap(mode)
+    local currentMap = self.keyMap[mode]
+    if self.currentModifierHeld ~= "" then
+        currentMap = currentMap[self.currentModifierHeld] or {}
+    end
+    return currentMap
+end
+
+function InputHandler:updateStatusBarForSequence()
+    if #self.currentKeySequence > 1 then
+        model:updateStatusBar("Sequence: " .. table.concat(self.currentKeySequence, " + "))
+    end
+    self:resetTimer()
+end
+
+function InputHandler:resetTimer()
+    if self.leaderTimeoutTimer then
+        os.cancelTimer(self.leaderTimeoutTimer)
+    end
+    self.leaderTimeoutTimer = os.startTimer(self.leaderTimeout)
+end
+
+function InputHandler:manageTimer()
+    if self.leaderTimeoutTimer then
+        os.cancelTimer(self.leaderTimeoutTimer)
+        self.leaderTimeoutTimer = nil
+    end
+end
+
+
+function InputHandler:handleInputEvent(mode)
     if model.InputMode == "keys" then
-        self:handleKeyEvent(model, view)
+        self:handleKeyEvent()
         model:updateScroll()
     elseif model.InputMode == "chars" then
-        self:handleCharEvent(model, view)
+        self:handleCharEvent()
         model:updateScroll()
     end
 end
 
-function InputHandler:handleKeyEvent(model, view)
+function InputHandler:handleKeyEvent()
     local event, key = os.pullEvent()
     if event == "key" then
         if model.mode == "insert" then
-            self:handleCharInput(keys.getName(key), model, view)
+            self:handleCharInput(keys.getName(key))
         else
-            self:handleKeyPress(key, true, model, view)
+            self:handleKeyPress(key, true)
         end
     elseif event == "key_up" then
-        self:handleKeyPress(key, false, model, view)
+        self:handleKeyPress(key, false)
     elseif event == "timer" then
         if #self.currentKeySequence > 0 then
             model:updateStatusBar("Sequence timed out, resetting...")
@@ -416,24 +429,24 @@ function InputHandler:handleKeyEvent(model, view)
     end
 end
 
-function InputHandler:handleCharInput(char, model, view)
+function InputHandler:handleCharInput(char)
     if model.InputMode == "chars" then
         model:insertChar(char)
         model:markDirty(model.cursorY)
     end
 end
 
-function InputHandler:handleCharEvent(model, view)
+function InputHandler:handleCharEvent()
     while true do
         local event, key = os.pullEvent()
 
         if event == "char" then
-            self:handleCharInput(key, model, view)
+            self:handleCharInput(key)
         elseif event == "key" then
             -- Refactor to check keyMap in "insert" mode
             local action = self.keyMap[model.mode][keys.getName(key)]
-            if action and type(action.callback) == "function" then
-                action.callback()
+            if action and action.command then
+                self:executeCommand(action.command)
                 break
             end
         end
@@ -447,7 +460,7 @@ function InputHandler:getKeyDescriptions(mode)
 
     local function traverseMap(map, prefix)
         for key, binding in pairs(map) do
-            if type(binding) == "table" and binding.callback then
+            if type(binding) == "table" and binding.command then
                 table.insert(descriptions, { combo = prefix .. key, description = binding.description })
             elseif type(binding) == "table" then
                 traverseMap(binding, prefix .. key .. " + ")
@@ -475,7 +488,10 @@ function InputHandler:mapCommand(name, func)
     self.commands[name] = func
 end
 
-function InputHandler:executeCommand(command, numericPrefix)
+function InputHandler:executeCommand(commandString, numericPrefix)
+    -- Parse the command and parameters
+    local command, params = self:parseCommandString(commandString)
+
     -- Handle empty or nil command cases
     if command == nil or command == "" then
         BufferHandler:switchMode("normal")
@@ -485,140 +501,165 @@ function InputHandler:executeCommand(command, numericPrefix)
         return
     end
 
-    -- Add command to history
-    table.insert(self.commandHistory, command)
+    -- Check if command starts with underscores, if so, don't add to history
+    if not command:match("^__") then
+        table.insert(self.commandHistory, commandString)
+    end
     self.historyIndex = nil
 
-    -- If no numericPrefix is provided, attempt to parse it from the command string
-    if not numericPrefix then
-        numericPrefix, command = command:match("^(%d*)(.*)$")
-        numericPrefix = tonumber(numericPrefix) or 1
+    -- If no numericPrefix is provided, attempt to parse it from the first parameter if it's a number
+    if not numericPrefix and tonumber(params[1]) ~= nil then
+        numericPrefix = tonumber(table.remove(params, 1))
+    else
+        numericPrefix = numericPrefix or 1
     end
 
+    -- Execute the command if it exists
     if self.commands[command] then
-        -- Wrap the command execution in pcall to catch any runtime errors
         local success, err = pcall(function()
             for i = 1, numericPrefix do
-                self.commands[command](i > 1)  -- Pass `true` for isRepeated on subsequent executions
+                self.commands[command](table.unpack(params), true, i, numericPrefix)  -- Additional parameters and repeat flags
             end
         end)
         if not success then
-            View:showPopup("Err: " .. err)
+            View:showPopup("Error: " .. err)
         end
     else
         View:showPopup("Unknown command: " .. command)
+        --remove command from history if it doesn't exist
+        table.remove(self.commandHistory)
     end
 
     -- Reset key sequence after execution
     self:resetKeySequence()
 end
 
-function InputHandler:handleCommandInput(model, view, initialCommand, autoExecute)
-    local command = initialCommand or ""  -- Start with the provided initialCommand or an empty string
+function InputHandler:parseCommandString(commandString)
+    local parts = {}
+    for part in commandString:gmatch("%S+") do -- Matches sequences of non-whitespace characters
+        table.insert(parts, part)
+    end
+    local command = table.remove(parts, 1) -- Removes the first element (the command) and returns it
+    return command, parts
+end
 
-    -- If autoExecute is true and initialCommand is nil, use the last command in history
+function InputHandler:handleCommandInput(initialCommand, autoExecute)
+    local command = self:initializeCommand(initialCommand, autoExecute)
+    if command == nil then return end
+
+    self:waitForKeyRelease()
+
+    self.command = command
+    self:captureAndProcessInput()
+    self.command = nil
+end
+
+function InputHandler:initializeCommand(initialCommand, autoExecute)
+    local command = nil 
     if autoExecute and initialCommand == nil then
         if #self.commandHistory > 0 then
-            command = self.commandHistory[#self.commandHistory]  -- Use the last command in history
+            command = self.commandHistory[#self.commandHistory]
+            View:showPopup("Executing previous command: " .. command)
+            self:executeCommand(command)
+            model:switchMode("normal")
+            self:resetKeySequence()
+            return nil
         else
             self.currentModifierHeld = ""
             View:showPopup("No previous command to execute")
             model:switchMode("normal")
             self:resetKeySequence()
-            return
+            return nil
         end
     end
+    command = initialCommand or ""
+    model:updateStatusBar(":" .. command)
 
-    model:updateStatusBar(":" .. command, view)  -- Display the initial ":" and any pre-filled text
-
-    -- If autoExecute is true and there is a command, execute it immediately
     if autoExecute and command ~= "" then
         self:executeCommand(command)
-        model:switchMode("normal")  -- Switch back to normal mode
+        model:switchMode("normal")
         self:resetKeySequence()
-        return
+        return nil
     end
 
-    -- Wait until all keys are released before starting to listen for input
-    local keysHeld = {}  -- Track currently held keys
+    return command
+end
+
+function InputHandler:waitForKeyRelease()
+    local keysHeld = {}
     while true do
         local event, key = os.pullEvent()
         if event == "key" then
-            keysHeld[key] = true  -- Mark this key as held down
+            keysHeld[key] = true
         elseif event == "key_up" then
-            keysHeld[key] = nil  -- Mark this key as released
-            -- If no keys are held down, break the loop and start listening for input
-            local anyKeysHeld = false
-            for _, held in pairs(keysHeld) do
-                if held then
-                    anyKeysHeld = true
-                    break
-                end
-            end
-            if not anyKeysHeld then
-                break
-            end
-        end
-    end
-
-    -- Start listening for input
-    while true do
-        local event, param1 = os.pullEvent()
-        if event == "char" then
-            command = command .. param1  -- Capture input characters
-            model:updateStatusBar(":" .. command, view)  -- Display the command prefixed with ":"
-        elseif event == "key" then
-            if param1 == keys.enter then
-                if command == "" then
-                    model:switchMode("normal")  -- Exit command mode
-                    self.currentModifierHeld = ""
-                    self:resetKeySequence()  -- Reset key sequence
-                    View:showPopup("No command entered")
-                    break
-                else
-                    self.currentModifierHeld = ""
-                    self:executeCommand(command)  -- Execute the command when Enter is pressed
-                    model:switchMode("normal")  -- Switch back to normal mode
-                    self:resetKeySequence()
-                    break
-                end
-            elseif param1 == keys.backspace then
-                command = command:sub(1, -2)  -- Handle backspace
-                model:updateStatusBar(":" .. command, view)
-            elseif param1 == keys.up then
-                -- Navigate up through the command history
-                if #self.commandHistory > 0 then
-                    if self.historyIndex == nil then
-                        self.historyIndex = #self.commandHistory
-                    elseif self.historyIndex > 1 then
-                        self.historyIndex = self.historyIndex - 1
-                    end
-                    command = self.commandHistory[self.historyIndex]
-                    model:updateStatusBar(":" .. command, view)
-                end
-            elseif param1 == keys.down then
-                -- Navigate down through the command history
-                if #self.commandHistory > 0 then
-                    if self.historyIndex == nil then
-                        self.historyIndex = #self.commandHistory
-                    elseif self.historyIndex < #self.commandHistory then
-                        self.historyIndex = self.historyIndex + 1
-                    else
-                        self.historyIndex = nil
-                        command = ""
-                    end
-                    if self.historyIndex then
-                        command = self.commandHistory[self.historyIndex]
-                    end
-                    model:updateStatusBar(":" .. command, view)
-                end
-            elseif param1 == keys.escape then
-                self:resetKeySequence()
-                model:switchMode("normal")  -- Exit command mode on Escape
-                return
-            end
+            keysHeld[key] = nil
+            if not next(keysHeld) then break end
         end
     end
 end
+
+function InputHandler:captureAndProcessInput()
+    while true do
+        local event, param1 = os.pullEvent()
+        if event == "char" then
+            self.command = self.command .. param1
+            model:updateStatusBar(":" .. self.command, view)
+        elseif event == "key" then
+            local breakLoop = self:handleCommandKeyEvents(param1)
+            if breakLoop then break end
+        end
+    end
+end
+
+function InputHandler:handleCommandKeyEvents(key)
+    if key == keys.enter then
+        if self.command == "" or nil then
+            View:showPopup("No command entered")
+        else
+            self:executeCommand(self.command)
+        end
+        self:finalizeCommandInput()
+        return true
+    elseif key == keys.backspace then
+        self.command = self.command:sub(1, -2)
+        model:updateStatusBar(":" .. self.command)
+    elseif key == keys.up or key == keys.down then
+        self.command = self:navigateCommandHistory(key)
+        model:updateStatusBar(":" .. self.command)
+    elseif key == keys.escape then
+        self:resetKeySequence()
+        model:switchMode("normal")
+        return true
+    end
+    return false
+end
+
+function InputHandler:finalizeCommandInput()
+    self.currentModifierHeld = ""
+    model:switchMode("normal")
+    self:resetKeySequence()
+end
+
+function InputHandler:navigateCommandHistory(key)
+    if key == keys.up then
+        if self.historyIndex == nil or self.historyIndex == 1 then
+            -- Wrap around to the end of the history when going up from the first item
+            self.historyIndex = #self.commandHistory
+        else
+            self.historyIndex = self.historyIndex - 1
+        end
+    elseif key == keys.down then
+        if self.historyIndex == nil or self.historyIndex == #self.commandHistory then
+            -- Wrap around to the start of the history when going down from the last item
+            self.historyIndex = 1
+        else
+            self.historyIndex = self.historyIndex + 1
+        end
+    end
+
+    -- Return the command at the new history index or the current command if no history exists
+    return self.commandHistory[self.historyIndex] or self.command 
+end
+
 
 return InputHandler
