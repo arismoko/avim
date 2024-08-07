@@ -43,6 +43,19 @@ local function init(components)
         bufferHandler.dynamicIdentifiers = identifiers  -- Store the identifiers in the bufferHandler
     end
 
+    -- Function to get a nested value from a table
+    local function getNestedValue(tbl, keys)
+        local value = tbl
+        for _, key in ipairs(keys) do
+            if type(value) == "table" and value[key] ~= nil then
+                value = value[key]
+            else
+                return nil
+            end
+        end
+        return value
+    end
+
     -- Store the original handleCharInput function
     local originalHandleCharInput = InputHandler.handleCharInput
 
@@ -76,12 +89,18 @@ local function init(components)
         local x = bufferHandler.cursorX
         local y = bufferHandler.cursorY - bufferHandler.scrollOffset + 1
 
+        -- Limit the number of suggestions to 5
+        local limitedSuggestions = {}
+        for i = 1, math.min(#suggestions, 5) do
+            table.insert(limitedSuggestions, suggestions[i])
+        end
+
         -- Calculate the height of the autocomplete window
-        local height = math.min(#suggestions, 5)
+        local height = #limitedSuggestions
         
         -- Determine the dynamic width based on the longest suggestion, capped at 15 characters
         local maxSuggestionLength = 0
-        for _, suggestion in ipairs(suggestions) do
+        for _, suggestion in ipairs(limitedSuggestions) do
             maxSuggestionLength = math.max(maxSuggestionLength, #suggestion)
         end
     
@@ -97,11 +116,11 @@ local function init(components)
         if y < 1 then
             y = 1
         elseif y + height - 1 > SCREENHEIGHT then
-            y = SCREENHEIGHT - height + 1
+            y = SCREENHEIGHT - height + 2
         end
     
         -- Draw autocomplete suggestions
-        for i, suggestion in ipairs(suggestions) do
+        for i, suggestion in ipairs(limitedSuggestions) do
             term.setCursorPos(x, y + i - 1)
             term.clearLine()
             term.write(suggestion)
@@ -112,7 +131,7 @@ local function init(components)
         term.setTextColor(savedTextColor)
         term.setBackgroundColor(savedBGColor)
     
-        bufferHandler.suggestions = suggestions
+        bufferHandler.suggestions = limitedSuggestions
         bufferHandler.autocompleteWindow = {x = x, y = y, width = width, height = height}
 
         return bufferHandler.autocompleteWindow
