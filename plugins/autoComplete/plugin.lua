@@ -253,8 +253,6 @@ local function init(components)
         else
             bufferHandler:backspace()
         end
-        bufferHandler:refreshScreen()
-        View:drawScreen()
     end, "Handle backspace with autocomplete")
 
     InputHandler:map({"insert"}, {"tab"}, "autocomplete_tab", function()
@@ -263,8 +261,6 @@ local function init(components)
         else
             bufferHandler:insertChar("  ")
         end
-        bufferHandler:refreshScreen()
-        View:drawScreen()
     end, "Autocomplete or insert tab")
 
     InputHandler:map({"insert"}, {"enter"}, "autocomplete_enter", function()
@@ -273,8 +269,6 @@ local function init(components)
         else
             bufferHandler:enter()
         end
-        bufferHandler:refreshScreen()
-        View:drawScreen()
     end, "Autocomplete or insert new line")
 
     InputHandler:map({"insert"}, {"up"}, "autocomplete_up", function()
@@ -284,8 +278,6 @@ local function init(components)
         else
             InputHandler:execute("move_up")
         end
-        bufferHandler:refreshScreen()
-        View:drawScreen()
     end, "Move up in autocomplete or move cursor up")
 
     InputHandler:map({"insert"}, {"down"}, "autocomplete_down", function()
@@ -306,8 +298,6 @@ local function init(components)
             InputHandler:execute("move_left")
         end
         
-        bufferHandler:refreshScreen()
-        View:drawScreen()
     end, "Cancel autocomplete and move cursor left")
 
     InputHandler:map({"insert"}, {"right"}, "autocomplete_right", function()
@@ -317,8 +307,6 @@ local function init(components)
             InputHandler:execute("move_right")
         end
 
-        bufferHandler:refreshScreen()
-        View:drawScreen()
     end, "Accept autocomplete or move cursor right")
 
     -- Save the original loadFile function
