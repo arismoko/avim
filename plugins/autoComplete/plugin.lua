@@ -76,7 +76,6 @@ local function init(components)
             bufferHandler:resetAutocomplete()
             bufferHandler:updateStatusBar("No words to autocomplete")
         end
-        View:drawScreen()
     end
 
     -- Function to show the autocomplete window

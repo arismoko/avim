@@ -92,7 +92,6 @@ function BufferHandler:undo()
 end
 
 function BufferHandler:refreshScreen()
-    term.clear()
     -- Mark all lines as dirty except the status bar
     local adjustedHeight = SCREENHEIGHT - self.statusBarHeight
     for i = 1, adjustedHeight do
