@@ -92,7 +92,6 @@ function BufferHandler:undo()
 end
 
 function BufferHandler:refreshScreen()
-    term.clear()
     -- Mark all lines as dirty except the status bar
     local adjustedHeight = SCREENHEIGHT - self.statusBarHeight
     for i = 1, adjustedHeight do
@@ -612,6 +611,37 @@ end
 
 function BufferHandler:getBufferAsString()
     return table.concat(self.buffer, "\n")
+end
+function BufferHandler:getBufferState()
+    -- Capture the current buffer state, including buffer content, cursor position, and scroll offsets
+    return {
+        buffer = table.deepCopy(self.buffer),
+        cursorX = self.cursorX,
+        cursorY = self.cursorY,
+        scrollOffset = self.scrollOffset,
+        horizontalScrollOffset = self.horizontalScrollOffset,
+        visualStartX = self.visualStartX,
+        visualStartY = self.visualStartY,
+        isVisualMode = self.isVisualMode
+    }
+end
+
+function BufferHandler:restoreBufferState(state)
+    -- Restore the buffer state from the given state table
+    if not state then return end
+
+    self.buffer = table.deepCopy(state.buffer)
+    self.cursorX = state.cursorX
+    self.cursorY = state.cursorY
+    self.scrollOffset = state.scrollOffset
+    self.horizontalScrollOffset = state.horizontalScrollOffset
+    self.visualStartX = state.visualStartX
+    self.visualStartY = state.visualStartY
+    self.isVisualMode = state.isVisualMode
+
+    -- Refresh the screen to reflect the restored state
+    self:refreshScreen()
+    getView():drawScreen()
 end
 
 

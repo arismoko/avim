@@ -90,7 +90,6 @@ function View:createWindow(x, y, width, height, backgroundColor, textColor)
         
     function window:close()
         local view = View:getInstance()
-
         view.activeWindow = nil
         view:drawScreen()
     end
@@ -124,6 +123,7 @@ function View:createWindow(x, y, width, height, backgroundColor, textColor)
 
     function window:clear()
         for i = 1, self.height do
+            -- Clear each line in the buffer
             self.buffer[i] = string.rep(" ", self.width)
         end
         self.currentLine = 1
@@ -256,8 +256,7 @@ end
 function View:drawScreen()
     if self.activeWindow then
         self.activeWindow:show()
-        return
-    else
+    end
         local adjustedHeight = SCREENHEIGHT - Model.statusBarHeight
 
         for lineNumber in pairs(Model.dirtyLines) do
@@ -267,7 +266,6 @@ function View:drawScreen()
         Model:clearDirtyLines()
         self:drawStatusBar()
         term.setCursorBlink(true)
-    end
 end
 
 function View:getLineNumberWidth()

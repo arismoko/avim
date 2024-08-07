@@ -175,7 +175,7 @@ local function init(components)
         if bufferHandler.errorWindow then
             bufferHandler.errorWindow:close()
             bufferHandler.errorWindow = nil
-            viewInstance:drawScreen()
+            View:drawScreen()
         end
     end
 end
@@ -236,133 +236,6 @@ function viewInstance:drawLine(y)
         end
     end
 end
-  
-
-    -- Overwrite the createWindow function to apply custom colors
-    function viewInstance:createWindow(x, y, width, height, backgroundColor, textColor)
-        backgroundColor = backgroundColor or colorMatch.popupBG
-        textColor = textColor or colorMatch.popupFont
-        
-        width = width or (SCREENWIDTH - x + 1)
-        height = height or (SCREENHEIGHT - y)
-
-        if x + width - 1 > SCREENWIDTH then
-            width = SCREENWIDTH - x + 1
-        end
-        if y + height > SCREENHEIGHT then
-            height = SCREENHEIGHT - y
-        end
-
-        local window = {
-            x = x,
-            y = y,
-            width = width,
-            height = height,
-            backgroundColor = backgroundColor,
-            textColor = textColor,
-            buffer = {},
-            currentLine = 1,
-            currentColumn = 1
-        }
-
-        for i = 1, height do
-            window.buffer[i] = string.rep(" ", width)
-        end
-
-        function window:show()
-            viewInstance.activeWindow = self
-            term.setBackgroundColor(self.backgroundColor)
-            term.setTextColor(self.textColor)
-            for i = 1, self.height do
-                term.setCursorPos(self.x, self.y + i - 1)
-                term.write(self.buffer[i])
-            end
-            term.setBackgroundColor(colors.black)
-            term.setTextColor(colors.white)
-            viewInstance:drawScreen()
-        end
-
-        function window:scrollUp()
-            if self.currentLine > 1 then
-                self.currentLine = self.currentLine - 1
-                for i = 1, self.height - 1 do
-                    self.buffer[i] = self.buffer[i + 1]
-                end
-                self.buffer[self.height] = string.rep(" ", self.width)
-                self:show()
-            end
-        end
-
-        function window:scrollDown()
-            if self.currentLine < #self.buffer then
-                self.currentLine = self.currentLine + 1
-                for i = self.height, 2, -1 do
-                    self.buffer[i] = self.buffer[i - 1]
-                end
-                self.buffer[1] = string.rep(" ", self.width)
-                self:show()
-            end
-        end
-
-        function window:close()
-
-            viewInstance.activeWindow = nil
-            viewInstance:drawScreen()
-        end
-
-        function window:writeText(x, y, text)
-            local bufferLine = self.buffer[y] or string.rep(" ", self.width)
-            self.buffer[y] = bufferLine:sub(1, x - 1) .. text .. bufferLine:sub(x + #text)
-            self:show()
-        end
-
-        function window:write(text)
-            local remainingSpace = self.width - self.currentColumn + 1
-            local textToWrite = text:sub(1, remainingSpace)
-
-            self:writeText(self.currentColumn, self.currentLine, textToWrite)
-            self.currentColumn = self.currentColumn + #textToWrite
-
-            if self.currentColumn > self.width then
-                self.currentLine = self.currentLine + 1
-                self.currentColumn = 1
-            end
-            self:show()
-        end
-
-        function window:writeline(text)
-            self:write(text)
-            self.currentLine = self.currentLine + 1
-            self.currentColumn = 1
-            self:show()
-        end
-
-        function window:clear()
-            for i = 1, self.height do
-                self.buffer[i] = string.rep(" ", self.width)
-            end
-            self.currentLine = 1
-            self.currentColumn = 1
-        end
-
-        function window:print(text)
-            local lines = {}
-
-            for line in text:gmatch("[^\r\n]+") do
-                table.insert(lines, line)
-            end
-
-            for _, line in ipairs(lines) do
-                if self.currentLine > self.height then
-                    return
-                end
-                self:writeline(line)
-            end
-        end
-
-        table.insert(viewInstance.windows, window)
-        return window
-    end
     function View:showErrorWindow(errorMessage, lineNumber)
         local x = 1  -- Align the window to start from the left of the screen
         local y = lineNumber + 1  -- Place the window right below the error line

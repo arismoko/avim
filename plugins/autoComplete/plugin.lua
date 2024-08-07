@@ -57,32 +57,25 @@ local function init(components)
             local suggestions = bufferHandler:getAutocompleteSuggestions(currentWord)
             if #suggestions > 0 then
                 View:showAutocompleteWindow(suggestions)
-            else
-                bufferHandler:resetAutocomplete()
+                bufferHandler:updateStatusBar("Autocomplete suggestions for: " .. currentWord)
             end
         else
             bufferHandler:resetAutocomplete()
+            bufferHandler:updateStatusBar("No words to autocomplete")
         end
-    end
-
-    -- Helper function to get a nested value from a table
-    local function getNestedValue(tbl, keys)
-        local value = tbl
-        for _, key in ipairs(keys) do
-            if type(value) == "table" and value[key] ~= nil then
-                value = value[key]
-            else
-                return nil
-            end
-        end
-        return value
+        View:drawScreen()
     end
 
     -- Function to show the autocomplete window
     function View:showAutocompleteWindow(suggestions)
+        -- Save current terminal state
+        local savedCursorX, savedCursorY = term.getCursorPos()
+        local savedTextColor = term.getTextColor()
+        local savedBGColor = term.getBackgroundColor()
+
         local x = bufferHandler.cursorX
         local y = bufferHandler.cursorY - bufferHandler.scrollOffset + 1
-    
+
         -- Calculate the height of the autocomplete window
         local height = math.min(#suggestions, 5)
         
@@ -96,7 +89,7 @@ local function init(components)
         local width = math.min(maxSuggestionLength + 5, 15)
     
         -- Adjust 'y' to place the window above the cursor line if possible
-        if y > SCREENHEIGHT/2 then
+        if y > SCREENHEIGHT / 2 then
             y = y - height - 1 -- Move the window above the cursor line
         end
     
@@ -107,20 +100,21 @@ local function init(components)
             y = SCREENHEIGHT - height + 1
         end
     
-        if bufferHandler.autocompleteWindow then
-            bufferHandler.autocompleteWindow:clear()
-        else
-            bufferHandler.autocompleteWindow = self:createWindow(x, y, width, height, colors.lightGray, colors.black)
-            bufferHandler:updateStatusBar("Autocomplete suggestions window opened")
+        -- Draw autocomplete suggestions
+        for i, suggestion in ipairs(suggestions) do
+            term.setCursorPos(x, y + i - 1)
+            term.clearLine()
+            term.write(suggestion)
         end
     
-        for i, suggestion in ipairs(suggestions) do
-            bufferHandler.autocompleteWindow:writeline(suggestion)
-        end
+        -- Restore terminal state after drawing
+        term.setCursorPos(savedCursorX, savedCursorY)
+        term.setTextColor(savedTextColor)
+        term.setBackgroundColor(savedBGColor)
     
         bufferHandler.suggestions = suggestions
-        bufferHandler.autocompleteWindow:show()
-    
+        bufferHandler.autocompleteWindow = {x = x, y = y, width = width, height = height}
+
         return bufferHandler.autocompleteWindow
     end
     
@@ -197,14 +191,19 @@ local function init(components)
         return uniqueSuggestions
     end
 
-    
     -- Function to reset autocomplete state
     function bufferHandler:resetAutocomplete()
         if self.autocompleteWindow then
-            self.autocompleteWindow:close()
+            -- Clear the area where the autocomplete window was displayed
+            for i = 0, self.autocompleteWindow.height - 1 do
+                term.setCursorPos(self.autocompleteWindow.x, self.autocompleteWindow.y + i)
+                term.clearLine()
+            end
             self.autocompleteWindow = nil
-            self.suggestions = nil
         end
+        self.suggestions = nil
+        bufferHandler:refreshScreen()
+        View:drawScreen()
     end
 
     -- Function to handle inserting the selected suggestion
@@ -230,8 +229,12 @@ local function init(components)
     -- Map keybindings related to autocomplete
     InputHandler:map({"insert"}, {"backspace"}, "autocomplete_backspace", function()
         updateIdentifiers()
-        bufferHandler:resetAutocomplete()
-        bufferHandler:backspace()
+        if bufferHandler.suggestions then
+            bufferHandler:resetAutocomplete()
+        else
+            bufferHandler:backspace()
+        end
+        bufferHandler:refreshScreen()
         View:drawScreen()
     end, "Handle backspace with autocomplete")
 
@@ -240,9 +243,8 @@ local function init(components)
             bufferHandler:acceptAutocompleteSuggestion()
         else
             bufferHandler:insertChar("  ")
-            bufferHandler:markDirty(bufferHandler.cursorY)
-            View:drawLine(bufferHandler.cursorY - bufferHandler.scrollOffset)
         end
+        bufferHandler:refreshScreen()
         View:drawScreen()
     end, "Autocomplete or insert tab")
 
@@ -251,9 +253,9 @@ local function init(components)
             bufferHandler:acceptAutocompleteSuggestion()
         else
             bufferHandler:enter()
-            bufferHandler:markDirty(bufferHandler.cursorY)
-            View:drawScreen()
         end
+        bufferHandler:refreshScreen()
+        View:drawScreen()
     end, "Autocomplete or insert new line")
 
     InputHandler:map({"insert"}, {"up"}, "autocomplete_up", function()
@@ -261,9 +263,9 @@ local function init(components)
             table.insert(bufferHandler.suggestions, 1, table.remove(bufferHandler.suggestions))
             View:showAutocompleteWindow(bufferHandler.suggestions)
         else
-            bufferHandler:markDirty(bufferHandler.cursorY)
             InputHandler:execute("move_up")
         end
+        bufferHandler:refreshScreen()
         View:drawScreen()
     end, "Move up in autocomplete or move cursor up")
 
@@ -279,10 +281,13 @@ local function init(components)
     end, "Move down in autocomplete or move cursor down")
 
     InputHandler:map({"insert"}, {"left"}, "autocomplete_left", function()
-        updateIdentifiers()
-        bufferHandler:resetAutocomplete()
-        InputHandler:execute("move_left")
-        bufferHandler:markDirty(bufferHandler.cursorY)
+        if bufferHandler.suggestions then
+            bufferHandler:resetAutocomplete()
+        else
+            InputHandler:execute("move_left")
+        end
+        
+        bufferHandler:refreshScreen()
         View:drawScreen()
     end, "Cancel autocomplete and move cursor left")
 
@@ -291,9 +296,10 @@ local function init(components)
             bufferHandler:acceptAutocompleteSuggestion()
         else
             InputHandler:execute("move_right")
-            bufferHandler:markDirty(bufferHandler.cursorY)
-            View:drawScreen()
         end
+
+        bufferHandler:refreshScreen()
+        View:drawScreen()
     end, "Accept autocomplete or move cursor right")
 
     -- Save the original loadFile function
