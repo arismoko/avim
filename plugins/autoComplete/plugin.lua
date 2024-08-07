@@ -220,6 +220,7 @@ local function init(components)
             self.autocompleteWindow = nil
         end
         self.suggestions = nil
+        term.clear()
         bufferHandler:refreshScreen()
         View:drawScreen()
     end
