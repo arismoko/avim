@@ -308,6 +308,7 @@ InputHandler:map({"normal"}, {"d + d"}, "cut_line", function(isRepeated,iteratio
         bufferHandler.cursorY = 1
     end
 
+    bufferHandler:refreshScreen()
     bufferHandler:updateStatusBar("Cut line")
 end, "Cut Line")
 
