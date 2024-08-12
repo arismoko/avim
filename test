@@ -1,20 +1,8 @@
-while true do print("<3") end
-
-asdjfaklsjdfljasdlf
-asdfkjalsjdflkj
-asdfasdfjasldkfj
-asdklfjalskjdf
-asjdklfjaslkdfjasdf
-asdjfaklsjdfljasdlf
-asdfkjalsjdflkj
-asdfasdfjasldkfj
-asdklfjalskjdf
-asjdklfjaslkdfjasdf
-asdjfaklsjdfljasdlf
-asdfkjalsjdflkj
-asdfasdfjasldkfj
-asdklfjalskjdf
-asjdklfjaslkdfjasdf
-asdjfaklsjdfljasdlf
-asdfkjalsjdflkj
-
+i = 0
+while true do
+  print("<3")
+  if i > 100 then break end
+  i=i+1
+end
+if true then
+print("hello!") end
