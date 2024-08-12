@@ -4,5 +4,7 @@ while true do
   if i > 100 then break end
   i=i+1
 end
+hello_world = 5
 if true then
 print("hello!") end
+butt = "shite"

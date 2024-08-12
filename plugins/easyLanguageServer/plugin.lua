@@ -106,8 +106,7 @@ local function init(components)
 
 			return math.min(#TextBuffer.buffer, lineCount) -- If not found, return the last line number
 		end
-	end -- Missing end added here
-
+	end
 	local function extractFromErrorString(message, fileName)
 		local cleanedMessage = message:gsub("^[^:]+:%d+:%s*", "")
 		local wordPosition = cleanedMessage:match("position (%d+)")
@@ -122,12 +121,55 @@ local function init(components)
 	local function extractFromErrorMessage(message)
 		local lineNumber = message:match(":(%d+):")
 		local cleanedMessage = message:gsub("^[^:]+:%d+:%s*", "")
-		ScreenManager:showPopup("Line: " .. lineNumber .. " Error: " .. cleanedMessage)
 		lineNumber = tonumber(lineNumber)
 		lineNumber = math.min(#TextBuffer.buffer, lineNumber) -- If not found, return the last line number
 		table.insert(errors, { line = lineNumber, message = cleanedMessage })
 		return errors
 	end
+	local function getIdentifierLine(name, filename)
+		local position = nil
+
+		-- Traverse the AST to find the identifier and its position
+		local function traverse(node)
+			if node.type == "identifier" and node.value == name then
+				position = node.position
+				return position
+			end
+			for _, v in pairs(node) do
+				if type(v) == "table" then
+					traverse(v)
+				end
+			end
+		end
+
+		-- Read the file and tokenize the content
+		local file = fs.open(filename, "r")
+		if not file then
+			error("Failed to open file")
+		end
+		local code = file.readAll()
+		file.close()
+
+		if code == "" then
+			error("File is empty")
+		end
+
+		local tokens = Tokenizer.tokenize(code)
+		local parser = LuaParser:new(tokens)
+		local ast = parser:parse()
+
+		-- Traverse the AST to find the position
+		traverse(ast)
+
+		-- If position is found, use the working function to calculate the line number
+		if position then
+			local lineNumber = convertToLineNumber(position, filename)
+			return math.min(#TextBuffer.buffer, lineNumber - 1)
+		else
+			error("Identifier not found")
+		end
+	end
+
 	local function checkCurrentFileForErrors()
 		errors = {} -- Clear previous errors
 		local fileName = TextBuffer.filename
@@ -417,8 +459,8 @@ local function init(components)
 
 	InputController:map({ "normal" }, { "g + d" }, "goto_definition", function()
 		-- Get the word under the cursor
-		local word = TextBuffer:getNextIdentifierOnLine()
 
+		local word = TextBuffer:getWordAtCursor()
 		if not word or word == "" then
 			TextBuffer:updateStatusError("No word under cursor")
 			return
@@ -430,21 +472,14 @@ local function init(components)
 			return
 		end
 
-		-- Search for the word in the dynamicIdentifiers list
-		local identifierEntry = nil
-		for _, entry in ipairs(TextBuffer.dynamicIdentifiers) do
-			if entry.identifier == word then
-				identifierEntry = entry
-				break
-			end
-		end
-
-		if identifierEntry then
+		--convert pos to line number and move cursor to that line
+		local line = getIdentifierLine(word, TextBuffer.filename)
+		if line then
 			-- Move the cursor to the line where the identifier was defined
-			TextBuffer.cursorY = identifierEntry.line
+			TextBuffer.cursorY = line
 			TextBuffer.cursorX = 1
 			TextBuffer:updateScroll(SCREENHEIGHT)
-			TextBuffer:updateStatusBar("Jumped to definition of '" .. word .. "' at line " .. identifierEntry.line)
+			TextBuffer:updateStatusBar("Jumped to definition of '" .. word .. "' at line " .. line)
 		else
 			TextBuffer:updateStatusError("Definition for '" .. word .. "' not found")
 		end

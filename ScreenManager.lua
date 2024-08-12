@@ -445,6 +445,8 @@ function ScreenManager:drawStatusBar()
 			.. TextBuffer.cursorX
 			.. " | Mode: "
 			.. TextBuffer.mode
+			.. " | Word: "
+			.. TextBuffer:getWordAtCursor()
 	)
 
 	term.setBackgroundColor(colors.black)
