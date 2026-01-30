@@ -186,14 +186,3 @@ KeyHandler:map("n", "backslash", function()
     openFileExplorer()
 end, "Open File Explorer")
 ```
-
-## DOCS COMING SOON!
-```
-
-## Contributions
-
-Feel free to contribute to AVIM by submitting issues or pull requests on our GitHub repository. Contributions can include new features, plugins, bug fixes, or improvements to documentation.
-
----
-
-**AVIM** brings the power of modal text editing to ComputerCraft, combining the flexibility of Vim with the extensibility of Lua in a Minecraft environment. Explore, customize, and enhance your text editing experience with AVIM!
